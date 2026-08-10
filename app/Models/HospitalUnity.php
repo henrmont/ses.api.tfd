@@ -12,5 +12,7 @@ class HospitalUnity extends Model
     protected $fillable = [
         'name',
         'cnes',
+        'city',
+        'state',
     ];
 }
