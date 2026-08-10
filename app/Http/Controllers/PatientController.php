@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\PatientFormRequest;
 use App\Models\Cid;
 use App\Models\Escort;
 use App\Models\Patient;
@@ -23,22 +22,35 @@ class PatientController extends Controller
         $this->authorize('tfd/paciente listar');
         $patient_cares = PatientCare::query()
             ->tfd()
+            ->where('is_archived', false)
             ->with('patient.patientInfo','user.professional')
             ->orderBy('id','desc')
             ->get();
         return response()->json($patient_cares, 200);
     }
 
-    public function createPatient(PatientFormRequest $request, PatientService $patientService)
+    public function getArchivePatients()
+    {
+        $this->authorize('tfd/paciente listar');
+        $patient_cares = PatientCare::query()
+            ->tfd()
+            ->where('is_archived', true)
+            ->with('patient.patientInfo','user.professional')
+            ->orderBy('id','desc')
+            ->get();
+        return response()->json($patient_cares, 200);
+    }
+
+    public function createPatient(Request $request, PatientService $patientService)
     {
         $this->authorize('tfd/paciente criar');
         return $patientService->createPatient($request);
     }
 
-    public function updatePatient(Patient $patient, PatientFormRequest $request, PatientService $patientService)
+    public function updatePatient(PatientCare $patient_care, Request $request, PatientService $patientService)
     {
         $this->authorize('tfd/paciente atualizar');
-        return $patientService->updatePatient($patient, $request);
+        return $patientService->updatePatient($patient_care, $request);
     }
 
     public function getPatientEscorts(PatientCare $patient_care)
@@ -157,7 +169,31 @@ class PatientController extends Controller
         return $patientService->validatePatient($patient_care);
     }
 
+    public function finishBackPatient(PatientCare $patient_care, PatientService $patientService)
+    {
+        $this->authorize('tfd/paciente atualizar');
+        return $patientService->finishBackPatient($patient_care);
+    }
+
     // checks
+    public function getPatientCns($cns)
+    {
+        $this->authorize('tfd/paciente listar');
+        $patient = Patient::query()
+            ->where('cns', $cns)
+            ->firstOrFail();
+        return response()->json($patient, 200);
+    }
+
+    public function getPatientDocument($document)
+    {
+        $this->authorize('tfd/paciente listar');
+        $patient = Patient::query()
+            ->where('document', $document)
+            ->firstOrFail();
+        return response()->json($patient, 200);
+    }
+
     public function getEscortCns($cns)
     {
         $this->authorize('tfd/paciente acompanhantes');
@@ -177,7 +213,7 @@ class PatientController extends Controller
     }
 
     // validators
-    public function cnsPatientExists($cns, $data)
+    public function cnsPatientExists($cns, $data = null)
     {
         $this->authorize('tfd/paciente listar');
         $exists = Patient::query()
@@ -191,7 +227,7 @@ class PatientController extends Controller
         return response()->json($exists, 200);
     }
 
-    public function cnsEscortExists(PatientCare $patient_care, $cns, $data)
+    public function cnsEscortExists(PatientCare $patient_care, $cns, $data = null)
     {
         $this->authorize('tfd/paciente acompanhantes');
         $exists = $patient_care->escorts()
@@ -202,7 +238,7 @@ class PatientController extends Controller
         return response()->json($exists, 200);
     }
 
-    public function documentPatientExists($document, $data)
+    public function documentPatientExists($document, $data = null)
     {
         $this->authorize('tfd/paciente listar');
         $exists = Patient::query()
@@ -216,7 +252,7 @@ class PatientController extends Controller
         return response()->json($exists, 200);
     }
 
-    public function documentEscortExists(PatientCare $patient_care, $document, $data)
+    public function documentEscortExists(PatientCare $patient_care, $document, $data = null)
     {
         $this->authorize('tfd/paciente acompanhantes');
         $exists = $patient_care->escorts()

@@ -7,7 +7,6 @@ use App\Models\Passenger;
 use App\Models\Patient;
 use App\Models\PatientRequest;
 use App\Models\Professional;
-use App\Models\Ticket;
 use App\Models\Travel;
 use App\Models\TravelRoute;
 use Exception;
@@ -54,6 +53,19 @@ class TravelService
         }
     }
 
+    public function movePatientRequestFromArchive(PatientRequest $patient_request)
+    {
+        try {
+            $patient_request->update([
+                'back_to_travel' => 'Retirou do arquivo',
+            ]);
+            $patient_request->update(['is_travel_archived' => false]);
+            return response()->json(['message' => 'Solicitação retirada do arquivo.'], 200);
+        } catch (Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
     public function movePatientRequestFromOthers(PatientRequest $patient_request)
     {
         try {
@@ -91,13 +103,16 @@ class TravelService
                                 'type' => $reservation['tipo'],
                                 'locator' => $reservation['localizador'],
                                 'departure_date' => date('Y-m-d', strtotime($reservation['dataEmbarque'])),
-                                // 'return_date' => date('Y-m-d', strtotime($reservation['dataDesembarque'])),
-                                'description' => $reservation['descricaoOs']
+                                'description' => $reservation['descricaoOs'],
+                                'company' => $reservation['cia'],
                             ]);
                             foreach ($reservation['trechos']['trecho'] as $router) {
                                 $travel->travelRoutes()->create([
+                                    'departure' => $router['dataPartida'],
+                                    'arrival' => $router['dataChegada'],
                                     'origin' => $router['dsOrigem'],
                                     'destination' => $router['dsDestino'],
+                                    'family' => $router['familia'],
                                 ]);
                             }
                         }
@@ -107,14 +122,22 @@ class TravelService
                                 'is_patient' => false,
                                 'escort_id' => Escort::where('document', $reservation['passageiros']['passageiro']['cpf'])->first()->id,
                                 'tariff' => $reservation['passageiros']['passageiro']['tarifa'],
-                                'tax' => $reservation['passageiros']['passageiro']['taxas']
+                                'tax' => $reservation['passageiros']['passageiro']['taxas'],
+                                'type' => $reservation['passageiros']['passageiro']['tipo'],
+                                'gender' => $reservation['passageiros']['passageiro']['sexo'],
+                                'ticket' => $reservation['passageiros']['passageiro']['numeroDoBilhete'],
+                                'discount' => $reservation['passageiros']['passageiro']['du']
                             ]);
                         } else {
                             $travel->passengers()->create([
                                 'is_patient' => true,
                                 'patient_id' => Patient::where('document', $reservation['passageiros']['passageiro']['cpf'])->first()->id,
                                 'tariff' => $reservation['passageiros']['passageiro']['tarifa'],
-                                'tax' => $reservation['passageiros']['passageiro']['taxas']
+                                'tax' => $reservation['passageiros']['passageiro']['taxas'],
+                                'type' => $reservation['passageiros']['passageiro']['tipo'],
+                                'gender' => $reservation['passageiros']['passageiro']['sexo'],
+                                'ticket' => $reservation['passageiros']['passageiro']['numeroDoBilhete'],
+                                'discount' => $reservation['passageiros']['passageiro']['du']
                             ]);
                         }
                     }
@@ -162,11 +185,11 @@ class TravelService
     {
         try {
             $this->tfd()->beginTransaction();
-            $passenger = $travel->passengers()->create($request->only('is_patient','tariff','tax'));
+            $passenger = $travel->passengers()->create($request->only('is_patient','tariff','tax','type','gender','seat','ticket','discount'));
             if ($passenger->is_patient)
-                $passenger->update(['patient_id' => $request->passenger]);
+                $passenger->update(['patient_id' => $request->passenger_id]);
             else
-                $passenger->update(['escort_id' => $request->passenger]);
+                $passenger->update(['escort_id' => $request->passenger_id]);
             $this->tfd()->commit();
             return response()->json(['message' => 'Passageiro criado com sucesso.'], 200);
         } catch (Exception $e) {
@@ -178,7 +201,7 @@ class TravelService
     public function updatePassenger(Passenger $passenger, Request $request)
     {
         try {
-            $passenger->update($request->only('tariff','tax'));
+            $passenger->update($request->only('tariff','tax','gender','seat','ticket','discount'));
             return response()->json(['message' => 'Passageiro atualizado com sucesso.'], 200);
         } catch (Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
@@ -220,6 +243,21 @@ class TravelService
         try {
             $travel_route->delete();
             return response()->json(['message' => 'Rota deletada com sucesso.'], 200);
+        } catch (Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    public function finishBackPatientRequest(PatientRequest $patient_request)
+    {
+        try {
+            $patient_request->update(['back_to_travel' => null]);
+            $professionalId = Professional::where('user_id',auth()->user()->id)->first()->id;
+            if ($patient_request->back_from_travel == $professionalId)
+                $patient_request->update(['back_from_travel' => null]);
+            if ($patient_request->back_from_cost_assistance == $professionalId)
+                $patient_request->update(['back_from_cost_assistance' => null]);
+            return response()->json(['message' => 'Solicitação atualizada com sucesso.'], 200);
         } catch (Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }

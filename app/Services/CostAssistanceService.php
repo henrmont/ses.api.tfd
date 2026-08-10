@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\CostAssistance;
 use App\Models\CostAssistanceDaily;
 use App\Models\PatientRequest;
+use App\Models\Payment;
 use App\Models\Professional;
+use App\Models\Travel;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -128,14 +130,37 @@ class CostAssistanceService
     {
         try {
             $this->tfd()->beginTransaction();
-            $patient_request->update([
-                'payment_professional_id' => $request->payment_professional_id,
-            ]);
-            $patient_request->attachments()->whereIn('id',$request->archives)->update([
-                'to_payment' => true
-            ]);
+            $payment = Payment::updateOrCreate(
+                [
+                    'patient_request_id' => $patient_request->id,
+                    'cost_assistance_id' => $request->cost_assistance_id,
+                    'travel_id'          => $request->travel_id,
+                ],
+                [
+                    'payment_professional_id' => $request->payment_professional_id
+                ]
+            );
+
+            // 2. Limpa os anexos antigos do pagamento e recria os novos
+            $payment->paymentAttachments()->delete();
+
+            if (!empty($request->attachments)) {
+                foreach ($request->attachments as $attachment) {
+                    $attachmentId = $attachment['file_id'] ?? $attachment['id'] ?? null;
+
+                    if ($attachmentId) {
+                        $payment->paymentAttachments()->create([
+                            'patient_request_attachment_id' => $attachmentId
+                        ]);
+                    }
+                }
+            }
+
+            // 3. Efetiva as alterações na transação
             $this->tfd()->commit();
+
             return response()->json(['message' => 'Solicitação tramitada com sucesso.'], 200);
+
         } catch (Exception $e) {
             $this->tfd()->rollBack();
             return response()->json(['message' => $e->getMessage()], 400);
@@ -166,7 +191,20 @@ class CostAssistanceService
         }
     }
 
-    
+    public function finishBackPatientRequest(PatientRequest $patient_request)
+    {
+        try {
+            $patient_request->update(['back_to_cost_assistance' => null]);
+            $professionalId = Professional::where('user_id',auth()->user()->id)->first()->id;
+            if ($patient_request->back_from_travel == $professionalId)
+                $patient_request->update(['back_from_travel' => null]);
+            if ($patient_request->back_from_cost_assistance == $professionalId)
+                $patient_request->update(['back_from_cost_assistance' => null]);
+            return response()->json(['message' => 'Solicitação atualizada com sucesso.'], 200);
+        } catch (Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
 
     
 

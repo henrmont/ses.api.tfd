@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Opinion;
 use App\Models\PatientRequest;
 use App\Models\Professional;
+use App\Models\Report;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,15 +27,7 @@ class OpinionService
                 'content' => $request->content,
                 'is_approved' => $request->is_approved,
             ]);
-            if (Professional::where('user_id', auth()->user()->id)->first()->id == $patient_request->medical_professional_id) {
-                $patient_request->update([
-                    'back_to_medical' => null,
-                ]);
-            } else {
-                $patient_request->update([
-                    'back_to_social' => null,
-                ]);
-            }
+            $patient_request->report()->update(['is_editable' => false]);
             $this->tfd()->commit();
             return response()->json(['message' => 'Parecer criado com sucesso.'], 200);
         } catch (Exception $e) {
@@ -48,15 +41,8 @@ class OpinionService
         try {
             $this->tfd()->beginTransaction();
             $opinion->update($request->all());
-            if (Professional::where('user_id', auth()->user()->id)->first()->id == $opinion->patientRequest->medical_professional_id) {
-                $opinion->patientRequest()->update([
-                    'back_to_medical' => null,
-                ]);
-            } else {
-                $opinion->patientRequest()->update([
-                    'back_to_social' => null,
-                ]);
-            }
+            $report = Report::find($opinion->patientRequest->report_id);
+            $report->update(['is_editable' => false]);
             $this->tfd()->commit();
             return response()->json(['message' => 'Parecer atualizado com sucesso.'], 200);
         } catch (Exception $e) {
@@ -70,15 +56,6 @@ class OpinionService
         try {
             $this->tfd()->beginTransaction();
             $opinion->delete();
-            if (Professional::where('user_id', auth()->user()->id)->first()->id == $opinion->patientRequest->medical_professional_id) {
-                $opinion->patientRequest()->update([
-                    'back_to_medical' => null,
-                ]);
-            } else {
-                $opinion->patientRequest()->update([
-                    'back_to_social' => null,
-                ]);
-            }
             $this->tfd()->commit();
             return response()->json(['message' => 'Parecer deletado com sucesso.'], 200);
         } catch (Exception $e) {
@@ -133,6 +110,25 @@ class OpinionService
         }
     }
 
+    public function movePatientRequestFromArchive($type, PatientRequest $patient_request)
+    {
+        try {
+            if ($type == 'medical') {
+                $patient_request->update([
+                    'back_to_medical' => 'Retirou do arquivo',
+                ]);
+            } else {
+                $patient_request->update([
+                    'back_to_social' => 'Retirou do arquivo',
+                ]);
+            }
+            $patient_request->update(['is_opinion_archived' => false]);
+            return response()->json(['message' => 'Solicitação retirada do arquivo.'], 200);
+        } catch (Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
     public function movePatientRequestFromOthers($type, PatientRequest $patient_request)
     {
         try {
@@ -159,6 +155,25 @@ class OpinionService
                 'travel_professional_id' => $request->travel_professional_id,
             ]);
             return response()->json(['message' => 'Solicitação tramitada com sucesso.'], 200);
+        } catch (Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    public function finishBackPatientRequest($type, PatientRequest $patient_request)
+    {
+        try {
+            if ($type == 'medical') {
+                $patient_request->update(['back_to_medical' => null]);
+            } else {
+                $patient_request->update(['back_to_social' => null]);
+            }
+            $professionalId = Professional::where('user_id',auth()->user()->id)->first()->id;
+            if ($patient_request->back_from_travel == $professionalId)
+                $patient_request->update(['back_from_travel' => null]);
+            if ($patient_request->back_from_cost_assistance == $professionalId)
+                $patient_request->update(['back_from_cost_assistance' => null]);
+            return response()->json(['message' => 'Solicitação atualizada com sucesso.'], 200);
         } catch (Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }

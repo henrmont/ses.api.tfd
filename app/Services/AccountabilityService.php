@@ -81,13 +81,27 @@ class AccountabilityService
         }
     }
 
+    public function movePatientRequestFromArchive(PatientRequest $patient_request)
+    {
+        try {
+            $patient_request->update([
+                'back_to_accountability' => 'Retirou do arquivo',
+                'back_to_cost_assistance' => 'Retirou do arquivo',
+            ]);
+            $patient_request->update(['is_cost_assistance_archived' => false]);
+            return response()->json(['message' => 'Solicitação retirada do arquivo.'], 200);
+        } catch (Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
     // AQUI
     public function movePatientRequest(PatientRequest $patient_request)
     {
         try {
             $patient_request->update([
                 'accountability_professional_id' => Professional::where('user_id',auth()->user()->id)->first()->id,
-                'is_accountability_archive' => false
+                'is_cost_assistance_archived' => false
             ]);
             return response()->json(['message' => 'Solicitação transferida com sucesso.'], 200);
         } catch (Exception $e) {
@@ -98,7 +112,7 @@ class AccountabilityService
     public function archivePatientRequest(PatientRequest $patient_request)
     {
         try {
-            $patient_request->update(['is_accountability_archive' => true]);
+            $patient_request->update(['is_cost_assistance_archived' => true]);
             return response()->json(['message' => 'Solicitação arquivada com sucesso.'], 200);
         } catch (Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);

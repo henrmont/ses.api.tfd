@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -23,7 +24,8 @@ class Travel extends Model
         'return_date',
         'description',
         'os',
-        'locator'
+        'locator',
+        'company',
     ];
 
     public function patientRequest(): BelongsTo
@@ -39,6 +41,34 @@ class Travel extends Model
     public function travelRoutes(): HasMany
     {
         return $this->hasMany(TravelRoute::class);
+    }
+
+    // Accessors & Mutators
+    protected $appends = [
+        'total_tariffs',
+        'total_taxes',
+        'total'
+    ];
+
+    protected function totalTariffs(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->passengers()->sum('tariff')
+        );
+    }
+
+    protected function totalTaxes(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->passengers()->sum('tax')
+        );
+    }
+
+    protected function total(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->totalTariffs + $this->totalTaxes
+        );
     }
 
 

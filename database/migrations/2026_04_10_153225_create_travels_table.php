@@ -23,6 +23,7 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->string('os')->nullable();
             $table->string('locator')->nullable();
+            $table->string('company')->nullable();
             $table->softDeletes();
             $table->timestamps();
         });

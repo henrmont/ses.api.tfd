@@ -16,6 +16,7 @@ class PatientCare extends Model
         'is_valid',
         'user_id',
         'is_archived',
+        'back_to_user'
     ];
 
     // Scopes
@@ -59,7 +60,7 @@ class PatientCare extends Model
 
     protected $appends = [
         'status',
-        'owner'
+        'owner',
     ];
 
     // Accessors & Mutators

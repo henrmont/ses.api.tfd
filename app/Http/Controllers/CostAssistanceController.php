@@ -23,12 +23,20 @@ class CostAssistanceController extends Controller
     {
         $this->authorize('tfd/ajuda de custo listar');
         $patient_requests = PatientRequest::query()
-            ->whereNull('back_to_owner')
-            ->whereNull('back_to_medical')
-            ->whereNull('back_to_social')
-            ->where('is_archived', false)
+            ->notPatientBack()
+            ->whereNull('back_to_travel')
+            ->where(function ($query) {
+                $query->whereNull('back_to_owner')->orWhereNull('back_from_cost_assistance');
+            })
+            ->where(function ($query) {
+                $query->whereNull('back_to_medical')->orWhereNull('back_from_cost_assistance');
+            })
+            ->where(function ($query) {
+                $query->whereNull('back_to_social')->orWhereNull('back_from_cost_assistance');
+            })
+            ->where('is_cost_assistance_archived', false)
             ->where('type','Agendamento')
-            ->with('report.patientCare.patient','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','paymentProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost', 'paymentInfo','paymentAttachments')
+            ->with('report.patientCare.patient','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
             ->orderBy('id','desc')
             ->get();
         return response()->json($patient_requests, 200);
@@ -44,7 +52,7 @@ class CostAssistanceController extends Controller
     {
         $this->authorize('tfd/ajuda de custo listar');
         $cost_assistances = $patient_request->costAssistances()
-            ->with('costAssistanceDailies.dailyCost')
+            ->with('costAssistanceDailies.dailyCost','patientRequest.travels.passengers.escort','patientRequest.travels.passengers.patient','passenger.patient','passenger.escort')
             ->orderBy('id','asc')
             ->get();
         return response()->json($cost_assistances, 200);
@@ -144,7 +152,7 @@ class CostAssistanceController extends Controller
     public function undoPatientRequest(PatientRequest $patient_request, Request $request, PatientRequestService $patientRequestService)
     {
         $this->authorize('tfd/ajuda de custo atualizar');
-        return $patientRequestService->undoPatientRequest($patient_request, $request);
+        return $patientRequestService->undoPatientRequest($patient_request, $request, 'cost assistance');
     }
 
     public function getPaymentProfessionals()
@@ -162,6 +170,12 @@ class CostAssistanceController extends Controller
     {
         $this->authorize('tfd/ajuda de custo atualizar');
         return $costAssistanceService->processPatientRequestToPayment($patient_request, $request);
+    }
+
+    public function finishBackPatientRequest(PatientRequest $patient_request, CostAssistanceService $costAssistanceService)
+    {
+        $this->authorize('tfd/ajuda de custo atualizar');
+        return $costAssistanceService->finishBackPatientRequest($patient_request);
     }
 
 }

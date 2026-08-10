@@ -19,8 +19,9 @@ class PatientRequestController extends Controller
     {
         $this->authorize('tfd/solicitação listar');
         $patient_requests = PatientRequest::query()
-            ->with('report.patientCare.patient','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','paymentProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost', 'paymentInfo','paymentAttachments')
-            // ->with('report.patientCare.patient','report.patientCare.reports','report.patientCare.user.professional','report.cid','report.attachments','medicalProfessional','travelProfessional','ownerProfessional','costAssistanceProfessional','escorts', 'attachments', 'hospitalUnity')
+            ->notPatientBack()
+            ->where('is_opinion_archived', false)
+            ->with('report.patientCare.patient','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
             ->orderBy('id','desc')
             ->get();
         return response()->json($patient_requests, 200);
@@ -136,10 +137,10 @@ class PatientRequestController extends Controller
         return $patientRequestService->movePatientRequestFromOthers($patient_request);
     }
 
-    public function movePatientRequestFromArchive(PatientRequest $patient_request, PatientRequestService $patientRequestService)
+    public function finishBackPatientRequest(PatientRequest $patient_request, PatientRequestService $patientRequestService)
     {
-        $this->authorize('tfd/consultar arquivo');
-        return $patientRequestService->movePatientRequestFromArchive($patient_request);
+        $this->authorize('tfd/solicitação atualizar');
+        return $patientRequestService->finishBackPatientRequest($patient_request);
     }
     
 }

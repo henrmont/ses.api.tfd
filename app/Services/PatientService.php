@@ -47,13 +47,15 @@ class PatientService
         }
     }
 
-    public function createPatient(PatientFormRequest $request)
+    public function createPatient(Request $request)
     {
         try {
             $this->tfd()->beginTransaction();
             $this->core()->beginTransaction();
-            $patient = Patient::where('cns', $request->cns)->first();
-            if (!$patient) {
+            $patient = Patient::where('cns', $request->cns)->orWhere('document', $request->document);
+            if ($patient->exists()) {
+                $patient->first()->update($request->all());
+            } else {
                 $patient = Patient::on('core')->create($request->except('observation','control_number'));
             }
             PatientCare::on('core')->create([
@@ -86,10 +88,11 @@ class PatientService
         }
     }
 
-    public function updatePatient(Patient $patient, PatientFormRequest $request)
+    public function updatePatient(PatientCare $patient_care, Request $request)
     {
         try {
             $this->tfd()->beginTransaction();
+            $patient = Patient::find($patient_care->patient_id);
             $patient->update($request->except('observation','control_number'));
             if ($request->file('file_cns'))
                 $patient->update(['file_cns_id' => $this->storeArchive($request->file('file_cns'))]);
@@ -157,9 +160,12 @@ class PatientService
     public function deleteEscort(PatientCareEscort $patient_care_escort)
     {
         try {
+            $this->tfd()->beginTransaction();
             $patient_care_escort->delete();
+            $this->tfd()->commit();
             return response()->json(['message' => 'Acompanhante deletado com sucesso.'], 200);
         } catch (Exception $e) {
+            $this->tfd()->rollBack();
             return response()->json(['message' => $e->getMessage()], 400);
         }
     }
@@ -167,9 +173,12 @@ class PatientService
     public function createReport(PatientCare $patient_care, $request)
     {
         try {
+            $this->tfd()->beginTransaction();
             $patient_care->reports()->create($request->all());
+            $this->tfd()->commit();
             return response()->json(['message' => 'Laudo criado com sucesso.'], 200);
         } catch (Exception $e) {
+            $this->tfd()->rollBack();
             return response()->json(['message' => $e->getMessage()], 400);
         }
     }
@@ -177,9 +186,12 @@ class PatientService
     public function updateReport(Report $report, $request)
     {
         try {
+            $this->tfd()->beginTransaction();
             $report->update($request->all());
+            $this->tfd()->commit();
             return response()->json(['message' => 'Laudo atualizado com sucesso.'], 200);
         } catch (Exception $e) {
+            $this->tfd()->rollBack();
             return response()->json(['message' => $e->getMessage()], 400);
         }
     }
@@ -187,9 +199,12 @@ class PatientService
     public function deleteReport(Report $report)
     {
         try {
+            $this->tfd()->beginTransaction();
             $report->delete();
+            $this->tfd()->commit();
             return response()->json(['message' => 'Laudo deletado com sucesso.'], 200);
         } catch (Exception $e) {
+            $this->tfd()->rollBack();
             return response()->json(['message' => $e->getMessage()], 400);
         }
     }
@@ -221,12 +236,27 @@ class PatientService
             $report_attachment->update(['name' => $request->name]);
             if ($request->file('file'))
                 $report_attachment->update(['archive_id' => $this->storeArchive($request->file('file'))]);
+            $report = Report::find($report_attachment->report_id);
             $this->tfd()->commit();
             $this->storage()->commit();
             return response()->json(['message' => 'Anexo atualizado com sucesso.'], 200);
         } catch (Exception $e) {
             $this->tfd()->rollBack();
             $this->storage()->rollBack();
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    public function deleteReportAttachment(ReportAttachment $report_attachment)
+    {
+        try {
+            $this->tfd()->beginTransaction();
+            $report_attachment->delete();
+            $report = Report::find($report_attachment->report_id);
+            $this->tfd()->commit();
+            return response()->json(['message' => 'Anexo deletado com sucesso.'], 200);
+        } catch (Exception $e) {
+            $this->tfd()->rollBack();
             return response()->json(['message' => $e->getMessage()], 400);
         }
     }
@@ -246,7 +276,8 @@ class PatientService
         try {
             $patient_care->update([
                 'is_archived' => false,
-                'user_id' => auth()->user()->id
+                'user_id' => auth()->user()->id,
+                'back_to_user' => 'Retirou do arquivo'
             ]);
             return response()->json(['message' => 'Paciente transferido para sua caixa.'], 200);
         } catch (Exception $e) {
@@ -266,21 +297,21 @@ class PatientService
         }
     }
 
-    public function deleteReportAttachment(ReportAttachment $report_attachment)
-    {
-        try {
-            $report_attachment->delete();
-            return response()->json(['message' => 'Anexo deletado com sucesso.'], 200);
-        } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
-    }
-
     public function validatePatient(PatientCare $patient_care)
     {
         try {
             $patient_care->update(['is_valid' => !$patient_care->is_valid]);
             return response()->json(['message' => 'Paciente '.($patient_care->is_valid ? 'validado' : 'invalidado').' com sucesso.'], 200);
+        } catch (Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    public function finishBackPatient(PatientCare $patient_care)
+    {
+        try {
+            $patient_care->update(['back_to_user' => null]);
+            return response()->json(['message' => 'Paciente atualizado com sucesso.'], 200);
         } catch (Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }

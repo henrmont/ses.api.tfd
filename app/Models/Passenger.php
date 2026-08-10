@@ -16,7 +16,12 @@ class Passenger extends Model
         'patient_id',
         'escort_id',
         'tariff',
-        'tax'
+        'tax',
+        'type',
+        'gender',
+        'seat',
+        'ticket',
+        'discount'
     ];
 
     public function travel(): BelongsTo
@@ -33,4 +38,6 @@ class Passenger extends Model
     {
         return $this->belongsTo(Escort::class);
     }
+
+    
 }

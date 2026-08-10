@@ -17,8 +17,11 @@ class Report extends Model
         'patient_care_id',
         'protocol',
         'cid_id',
+        'specialty',
         'lawsuit',
         'diagnosis',
+        'is_editable',
+        'is_export'
     ];
 
     // Relationships
@@ -40,6 +43,38 @@ class Report extends Model
     public function patientRequests(): HasMany
     {
         return $this->hasMany(PatientRequest::class);
+    }
+
+    // Accessors & Mutators
+    protected $appends = [
+        'has_patient_request',
+        'has_entrance_or_lawsuit',
+        'has_entrance_or_lawsuit_finished'
+    ];
+
+    protected function hasPatientRequest(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->patientRequests()->exists()
+        );
+    }
+
+    protected function hasEntranceOrLawsuit(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->patientRequests()->whereIn('type', ['Entrada', 'Ação Judicial'])->exists()
+        );
+    }
+
+    protected function hasEntranceOrLawsuitFinished(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->patientRequests
+                ->whereIn('type', ['Entrada', 'Ação Judicial'])
+                ->whereNotNull('medical_approved_opinion')
+                ->whereNotNull('social_approved_opinion')
+                ->isNotEmpty()
+        );
     }
 
     

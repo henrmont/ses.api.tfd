@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('payment_infos', function (Blueprint $table) {
+        Schema::create('payment_attachments', function (Blueprint $table) {
             $table->id();
-            $table->integer('patient_request_id');
-            $table->string('description')->nullable();
+            $table->foreignId('payment_id');
+            $table->foreignId('patient_request_attachment_id');
             $table->softDeletes();
             $table->timestamps();
         });
@@ -25,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('payment_infos');
+        Schema::dropIfExists('payment_attachments');
     }
 };

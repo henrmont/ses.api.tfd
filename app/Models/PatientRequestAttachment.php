@@ -13,7 +13,6 @@ class PatientRequestAttachment extends Model
         'patient_request_id',
         'archive_id',
         'name',
-        'to_payment',
     ];
 
     public function patientRequest()

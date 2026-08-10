@@ -75,7 +75,7 @@ class UserController extends Controller
     }
 
     // validators
-    public function emailUserExists($email, $data)
+    public function emailUserExists($email, $data = null)
     {
         $this->authorize('tfd/usuário listar');
         $exists = User::query()
@@ -87,7 +87,7 @@ class UserController extends Controller
         return response()->json($exists, 200);
     }
 
-    public function cnsUserExists($cns, $data)
+    public function cnsUserExists($cns, $data = null)
     {
         $this->authorize('tfd/usuário listar');
         $exists = Professional::query()

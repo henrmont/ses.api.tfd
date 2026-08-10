@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -45,6 +46,11 @@ class Escort extends Model
     public function patientCareEscort(): HasOne
     {
         return $this->hasOne(PatientCareEscort::class);
+    }
+
+    public function fileDocument(): HasOne
+    {
+        return $this->hasOne(Archive::class, 'id','file_document_id');
     }
 
     // Accessors & Mutators

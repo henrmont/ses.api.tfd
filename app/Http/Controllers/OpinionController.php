@@ -19,9 +19,27 @@ class OpinionController extends Controller
     {
         $this->authorize('tfd/parecer listar');
         $patient_requests = PatientRequest::query()
+            ->notPatientBack()
+            ->where(function ($query) {
+                $query->whereNull('back_to_owner')
+                    ->orWhere('back_from_cost_assistance', Professional::where('user_id', auth()->user()->id)->first()->id)
+                    ->orWhere('back_from_travel', Professional::where('user_id', auth()->user()->id)->first()->id);
+            })
+            ->where('is_opinion_archived', false)
+            ->with('report.patientCare.patient','report.patientCare.user.professional','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
+            ->orderBy('id','desc')
+            ->get();
+        return response()->json($patient_requests, 200);
+    }
+
+    public function getArchivePatientRequests()
+    {
+        $this->authorize('tfd/parecer listar');
+        $patient_requests = PatientRequest::query()
+            ->notPatientBack()
             ->whereNull('back_to_owner')
-            ->where('is_archived', false)
-            ->with('report.patientCare.patient','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','paymentProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost', 'paymentInfo','paymentAttachments')
+            ->where('is_opinion_archived', true)
+            ->with('report.patientCare.patient','report.patientCare.user.professional','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
             ->orderBy('id','desc')
             ->get();
         return response()->json($patient_requests, 200);
@@ -90,7 +108,7 @@ class OpinionController extends Controller
     public function archivePatientRequest(PatientRequest $patient_request, PatientRequestService $patientRequestService)
     {
         $this->authorize('tfd/parecer atualizar');
-        return $patientRequestService->archivePatientRequest($patient_request);
+        return $patientRequestService->archiveOpinionPatientRequest($patient_request);
     }
 
     public function haltedPatientRequest($type, PatientRequest $patient_request, OpinionService $opinionService)
@@ -105,6 +123,12 @@ class OpinionController extends Controller
         return $opinionService->movePatientRequestFromProcesses($type, $patient_request);
     }
 
+    public function movePatientRequestFromArchive($type, PatientRequest $patient_request, OpinionService $opinionService)
+    {
+        $this->authorize('tfd/parecer atualizar');
+        return $opinionService->movePatientRequestFromArchive($type, $patient_request);
+    }
+
     public function movePatientRequestFromOthers($type, PatientRequest $patient_request, OpinionService $opinionService)
     {
         $this->authorize('tfd/parecer atualizar');
@@ -116,7 +140,7 @@ class OpinionController extends Controller
         $this->authorize('tfd/parecer listar');
         $patient_requests = $report->patientRequests()
             ->whereNot('id', $patient_request->id)
-            ->with('report.patientCare.patient','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','paymentProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost', 'paymentInfo','paymentAttachments')
+            ->with('opinions','report.patientCare.patient','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
             ->orderBy('id','asc')
             ->get();
         return response()->json($patient_requests, 200);
@@ -148,6 +172,12 @@ class OpinionController extends Controller
     {
         $this->authorize('tfd/parecer atualizar');
         return $opinionService->processPatientRequestToCostAssistanceAndTravel($patient_request, $request);
+    }
+
+    public function finishBackPatientRequest($type, PatientRequest $patient_request, OpinionService $opinionService)
+    {
+        $this->authorize('tfd/parecer atualizar');
+        return $opinionService->finishBackPatientRequest($type, $patient_request);
     }
 
 }

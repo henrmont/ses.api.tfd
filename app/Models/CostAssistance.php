@@ -11,6 +11,10 @@ class CostAssistance extends Model
         'patient_request_id',
         'name',
         'type',
+        'passenger_id',
+        'bank',
+        'agency',
+        'account'
     ];
 
     public function patientRequest()
@@ -23,16 +27,25 @@ class CostAssistance extends Model
         return $this->hasMany(CostAssistanceDaily::class);
     }
 
-    // public function payment()
-    // {
-    //     return $this->hasOne(Payment::class);
-    // }
+    public function passenger()
+    {
+        return $this->belongsTo(Passenger::class);
+    }
 
     protected $appends = [
-        'total_dailies',
+        'total_amount',
+        'total_dailies'
     ];
 
     // Accessors & Mutators
+    protected function totalAmount(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->costAssistanceDailies()->sum('amount')
+        );
+    }
+
+
     protected function totalDailies(): Attribute
     {
         $total = $this->costAssistanceDailies()->with('dailyCost')->get()->reduce(function ($carry, $item) {
@@ -42,11 +55,5 @@ class CostAssistance extends Model
             get: fn () => $total
         );
     }
-
-    // protected function hasPaid(): Attribute
-    // {
-    //     return Attribute::make(
-    //         get: fn () => $this->payment()->where('has_paid',true)->exists()
-    //     );
-    // }
+    
 }

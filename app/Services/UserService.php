@@ -43,7 +43,7 @@ class UserService
                     'cbo' => $request->cbo,
                 ]);
             } else {
-                $user->update(['is_valid' => true]);
+                $user->update(['is_valid' => true, 'module_id' => $this->_module->id]);
                 UserModule::on('auth')->create([
                     'user_id' => $user->id,
                     'module_id' => $this->_module->id
@@ -82,6 +82,14 @@ class UserService
         try {
             $user_module = $user->userModule()->where('module_id',$this->_module->id)->first();
             $user_module->update(['is_valid' => !$user_module->is_valid]);
+            if (!$user_module->is_valid) {
+                $user->update(['module_id' => null]);
+            } 
+            if($user->userModule()->where('is_valid', true)->doesntExist()) {
+                $user->update(['is_valid' => false]);
+            } else {
+                $user->update(['is_valid' => true]);
+            }
             return response()->json(['message' => 'Usuário '.($user_module->is_valid ? 'validado' : 'invalidado').' com sucesso.'], 200);
         } catch (Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);

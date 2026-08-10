@@ -16,8 +16,11 @@ return new class extends Migration
             $table->foreignId('patient_care_id');
             $table->string('protocol');
             $table->foreignId('cid_id');
+            $table->string('specialty')->nullable();
             $table->boolean('lawsuit')->default(false);
             $table->text('diagnosis');
+            $table->boolean('is_editable')->default(true);
+            $table->boolean('is_export')->default(false);
             $table->softDeletes();
             $table->timestamps();
         });

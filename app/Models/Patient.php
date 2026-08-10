@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -50,6 +51,11 @@ class Patient extends Model
     public function patientCares(): HasMany
     {
         return $this->hasMany(PatientCare::class);
+    }
+
+    public function fileDocument(): belongsTo
+    {
+        return $this->belongsTo(Archive::class, 'file_document_id');
     }
     
 }

@@ -49,6 +49,6 @@ class Professional extends Model
 
     public function patientPaymentRequests()
     {
-        return $this->hasMany(PatientRequest::class, 'payment_professional_id');
+        return $this->hasMany(Payment::class, 'payment_professional_id');
     }
 }

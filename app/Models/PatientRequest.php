@@ -22,7 +22,6 @@ class PatientRequest extends Model
         'owner_professional_id',
         'cost_assistance_professional_id',
         'accountability_professional_id',
-        'payment_professional_id',
         'hospital_unity_id',
         'type',
         'consultation_date',
@@ -32,21 +31,28 @@ class PatientRequest extends Model
         'back_to_social',
         'back_to_travel',
         'back_to_cost_assistance',
-        'back_to_accountability',
-        'back_to_payment',
+        'back_from_travel',
+        'back_from_cost_assistance',
         'is_owner_bookmark',
         'is_medical_bookmark',
         'is_social_bookmark',
         'is_travel_bookmark',
         'is_cost_assistance_bookmark',
         'is_accountability_bookmark',
-        'is_payment_bookmark',
-        'is_archived',
-        'archive_professional_id',
-        'is_travel_finished',
-        'is_accountability_finished',
-        'is_payment_finished',
+        'is_opinion_archived',
+        'is_travel_archived',
+        'is_cost_assistance_archived',
     ];
+
+    // Scopes
+    public function scopeNotPatientBack($query)
+    {
+        return $query->whereHas('report', function ($q) {
+            $q->whereHas('patientCare', function ($subQ) {
+                $subQ->whereNull('back_to_user');
+            });
+        });
+    }
 
     // Relationships
     public function report(): BelongsTo
@@ -94,11 +100,6 @@ class PatientRequest extends Model
         return $this->belongsTo(Professional::class, 'accountability_professional_id');
     }
 
-    public function paymentProfessional(): BelongsTo
-    {
-        return $this->belongsTo(Professional::class, 'payment_professional_id');
-    }
-
     public function opinions(): HasMany
     {
         return $this->hasMany(Opinion::class);
@@ -119,16 +120,6 @@ class PatientRequest extends Model
         return $this->hasMany(Accountability::class);
     }
 
-    public function paymentInfo(): HasOne
-    {
-        return $this->hasOne(PaymentInfo::class);
-    }
-
-    public function paymentAttachments(): HasMany
-    {
-        return $this->hasMany(PatientRequestAttachment::class)->where('to_payment',true);
-    }
-
     // Accessors & Mutators
     protected $appends = [
         'owner',
@@ -143,12 +134,15 @@ class PatientRequest extends Model
         'social_approved_opinion',
         'travel',
         'travel_status',
+        'has_travel',
         'cost_assistance',
         'cost_assistance_status',
+        'has_cost_assistance',
+        'has_initial_cost_assistance',
+        'has_complementary_cost_assistance',
+        'has_cost_assistance_without_dailies',
         'accountability',
         'accountability_status',
-        'payment',
-        'payment_status',
     ];
 
     protected function owner(): Attribute
@@ -243,6 +237,13 @@ class PatientRequest extends Model
         );
     }
 
+    protected function hasTravel(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->travels()->exists()
+        );
+    }
+
     protected function costAssistance(): Attribute
     {
         return Attribute::make(
@@ -254,6 +255,34 @@ class PatientRequest extends Model
     {
         return Attribute::make(
             get: fn () => true
+        );
+    }
+
+    protected function hasCostAssistance(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->costAssistances()->exists()
+        );
+    }
+
+    protected function hasInitialCostAssistance(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->costAssistances()->where('type', 'Inicial')->exists()
+        );
+    }
+
+    protected function hasComplementaryCostAssistance(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->costAssistances()->where('type', 'Complemento')->exists()
+        );
+    }
+
+    protected function hasCostAssistanceWithoutDailies(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->costAssistances()->whereDoesntHave('costAssistanceDailies')->exists()
         );
     }
 
@@ -270,20 +299,5 @@ class PatientRequest extends Model
             get: fn () => $this->accountabilities()->whereHas('accountabilityDailies')->exists()
         );
     }
-
-    protected function payment(): Attribute
-    {
-        return Attribute::make(
-            get: fn () => $this->payment_professional_id == Professional::where('user_id', auth()->user()->id)->first()->id ? true : false
-        );
-    }
-
-    protected function paymentStatus(): Attribute
-    {
-        return Attribute::make(
-            get: fn () => true
-        );
-    }
-    
 
 }

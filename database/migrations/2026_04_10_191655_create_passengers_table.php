@@ -17,8 +17,13 @@ return new class extends Migration
             $table->boolean('is_patient');
             $table->foreignId('patient_id')->nullable();
             $table->foreignId('escort_id')->nullable();
-            $table->float('tariff', 10, 2);
-            $table->float('tax', 10, 2);
+            $table->float('tariff', 10, 2)->nullable();
+            $table->float('tax', 10, 2)->nullable();
+            $table->string('type')->nullable();
+            $table->string('gender')->nullable();
+            $table->string('seat')->nullable();
+            $table->string('ticket')->nullable();
+            $table->float('discount', 10, 2)->default(0);
             $table->softDeletes();
             $table->timestamps();
         });

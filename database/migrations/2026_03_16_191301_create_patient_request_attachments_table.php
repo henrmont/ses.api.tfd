@@ -16,7 +16,6 @@ return new class extends Migration
             $table->foreignId('patient_request_id');
             $table->foreignId('archive_id')->nullable();
             $table->string('name');
-            $table->boolean('to_payment')->default(false);
             $table->softDeletes();
             $table->timestamps();
         });

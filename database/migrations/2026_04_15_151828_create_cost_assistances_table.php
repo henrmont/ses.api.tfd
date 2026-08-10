@@ -16,6 +16,10 @@ return new class extends Migration
             $table->integer('patient_request_id');
             $table->string('name');
             $table->string('type');
+            $table->foreignId('passenger_id')->nullable();
+            $table->string('bank')->nullable();
+            $table->string('agency')->nullable();
+            $table->string('account')->nullable();
             $table->softDeletes();
             $table->timestamps();
         });

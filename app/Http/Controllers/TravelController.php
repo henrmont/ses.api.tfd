@@ -21,12 +21,41 @@ class TravelController extends Controller
     {
         $this->authorize('tfd/passagem listar');
         $patient_requests = PatientRequest::query()
-            ->whereNull('back_to_owner')
-            ->whereNull('back_to_medical')
-            ->whereNull('back_to_social')
-            ->where('is_archived', false)
+            ->notPatientBack()
+            ->whereNull('back_to_cost_assistance')
+            ->where(function ($query) {
+                $query->whereNull('back_to_owner')->orWhereNull('back_from_travel');
+            })
+            ->where(function ($query) {
+                $query->whereNull('back_to_medical')->orWhereNull('back_from_travel');
+            })
+            ->where(function ($query) {
+                $query->whereNull('back_to_social')->orWhereNull('back_from_travel');
+            })
+            ->where('is_travel_archived', false)
             ->where('type','Agendamento')
-            ->with('report.patientCare.patient','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','paymentProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost', 'paymentInfo','paymentAttachments')
+            ->with('report.patientCare.patient','report.patientCare.user.professional','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
+            ->orderBy('id','desc')
+            ->get();
+        return response()->json($patient_requests, 200);
+    }
+
+    public function getArchivePatientRequests()
+    {
+        $this->authorize('tfd/passagem listar');
+        $patient_requests = PatientRequest::query()
+            ->notPatientBack()
+            ->where(function ($query) {
+                $query->whereNull('back_to_owner')->orWhereNull('back_from_travel');
+            })
+            ->where(function ($query) {
+                $query->whereNull('back_to_medical')->orWhereNull('back_from_travel');
+            })
+            ->where(function ($query) {
+                $query->whereNull('back_to_social')->orWhereNull('back_from_travel');
+            })
+            ->where('is_travel_archived', true)
+            ->with('report.patientCare.patient','report.patientCare.user.professional','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
             ->orderBy('id','desc')
             ->get();
         return response()->json($patient_requests, 200);
@@ -50,7 +79,7 @@ class TravelController extends Controller
     public function undoPatientRequest(PatientRequest $patient_request, Request $request, PatientRequestService $patientRequestService)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $patientRequestService->undoPatientRequest($patient_request, $request);
+        return $patientRequestService->undoPatientRequest($patient_request, $request, 'travel');
     }
 
     public function finishPatientRequestTravel(PatientRequest $patient_request, TravelService $travelService)
@@ -63,6 +92,12 @@ class TravelController extends Controller
     {
         $this->authorize('tfd/passagem atualizar');
         return $travelService->movePatientRequestFromFinished($patient_request);
+    }
+
+    public function movePatientRequestFromArchive(PatientRequest $patient_request, TravelService $travelService)
+    {
+        $this->authorize('tfd/passagem atualizar');
+        return $travelService->movePatientRequestFromArchive($patient_request);
     }
 
     public function movePatientRequestFromOthers(PatientRequest $patient_request, TravelService $travelService)
@@ -137,6 +172,7 @@ class TravelController extends Controller
     {
         $this->authorize('tfd/passagem atualizar');
         $travel_routes = $travel->travelRoutes()
+            ->with('travel')
             ->orderBy('id','asc')
             ->get();
         return response()->json($travel_routes, 200);
@@ -158,5 +194,36 @@ class TravelController extends Controller
     {
         $this->authorize('tfd/passagem atualizar');
         return $travelService->deleteTravelRoute($travel_route);
+    }
+
+    public function archivePatientRequest(PatientRequest $patient_request, PatientRequestService $patientRequestService)
+    {
+        $this->authorize('tfd/passagem atualizar');
+        return $patientRequestService->archiveTravelPatientRequest($patient_request);
+    }
+
+    public function finishBackPatientRequest(PatientRequest $patient_request, TravelService $travelService)
+    {
+        $this->authorize('tfd/passagem atualizar');
+        return $travelService->finishBackPatientRequest($patient_request);
+    }
+
+    // validators
+    public function passengerExists(Travel $travel, Request $request)
+    {
+        $this->authorize('tfd/passagem listar');
+        // Converter para boolean para evitar erros de falsy (ex: string "true"/"false")
+        $isPatient = filter_var($request->is_patient, FILTER_VALIDATE_BOOLEAN);
+
+        $exists = $travel->passengers()
+            ->where(function ($query) use ($request, $isPatient) {
+                if ($isPatient) {
+                    $query->where('patient_id', $request->passenger_id);
+                } else {
+                    $query->where('escort_id', $request->passenger_id);
+                }
+            })
+            ->exists();
+        return response()->json($exists, 200);
     }
 }

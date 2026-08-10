@@ -20,11 +20,11 @@ class PaymentService
         }
     }
 
-    public function paymentInfo(PatientRequest $patient_request, Request $request)
+    public function updatePayment(Payment $payment, Request $request)
     {
         try {
-            $patient_request->paymentInfo()->updateOrCreate(['description' => $request->old], $request->all());
-            return response()->json(['message' => 'Descrição do pagamento atualizada com sucesso.'], 200);
+            $payment->update($request->all());
+            return response()->json(['message' => 'Pagamento atualizado com sucesso.'], 200);
         } catch (Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }
@@ -35,6 +35,19 @@ class PaymentService
         try {
             $patient_request->update(['is_payment_finished' => true]);
             return response()->json(['message' => 'Solicitação finalizada com sucesso.'], 200);
+        } catch (Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    public function movePatientRequestFromArchive(PatientRequest $patient_request)
+    {
+        try {
+            $patient_request->update([
+                'back_to_payment' => 'Retirou do arquivo',
+            ]);
+            $patient_request->update(['is_payment_archived' => false]);
+            return response()->json(['message' => 'Solicitação retirada do arquivo.'], 200);
         } catch (Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }

@@ -71,8 +71,9 @@ Route::middleware(['api', Auth::class])
     ->controller(PatientController::class)
     ->group(function () {
         Route::get('get-patients', 'getPatients');
+        Route::get('get-archive-patients', 'getArchivePatients');
         Route::post('create-patient', 'createPatient');
-        Route::post('update-patient/{patient}', 'updatePatient');
+        Route::post('update-patient/{patient_care}', 'updatePatient');
         Route::get('get-patient-escorts/{patient_care}', 'getPatientEscorts');
         Route::post('create-patient-escort/{patient_care}', 'createPatientEscort');
         Route::patch('update-patient-escort/{escort}', 'updatePatientEscort');
@@ -90,6 +91,7 @@ Route::middleware(['api', Auth::class])
         Route::patch('move-patient-from-archive/{patient_care}', 'movePatientFromArchive');
         Route::patch('move-patient-from-others/{patient_care}', 'movePatientFromOthers');
         Route::patch('validate-patient/{patient_care}', 'validatePatient');
+        Route::patch('finish-back-patient/{patient_care}', 'finishBackPatient');
     });
 
 Route::middleware(['api', Auth::class])
@@ -109,6 +111,7 @@ Route::middleware(['api', Auth::class])
         Route::patch('move-patient-request-from-processes/{patient_request}', 'movePatientRequestFromProcesses');
         Route::patch('move-patient-request-from-others/{patient_request}', 'movePatientRequestFromOthers');
         Route::patch('move-patient-request-from-archive/{patient_request}', 'movePatientRequestFromArchive');
+        Route::patch('finish-back-patient-request/{patient_request}', 'finishBackPatientRequest');
         Route::get('get-patient-request-attachments/{patient_request}', 'getPatientRequestAttachments');
         Route::post('create-patient-request-attachment/{patient_request}', 'createPatientRequestAttachment');
         Route::patch('update-patient-request-attachment/{patient_request_attachment}', 'updatePatientRequestAttachment');
@@ -129,6 +132,7 @@ Route::middleware(['api', Auth::class])
     ->controller(OpinionController::class)
     ->group(function () {
         Route::get('get-patient-requests', 'getPatientRequests');
+        Route::get('get-archive-patient-requests', 'getArchivePatientRequests');
         Route::get('get-type', 'getType');
         Route::get('get-social-professionals', 'getSocialProfessionals');
         Route::get('get-opinions/{patient_request}', 'getOpinions');
@@ -140,7 +144,9 @@ Route::middleware(['api', Auth::class])
         Route::patch('archive-patient-request/{patient_request}', 'archivePatientRequest');
         Route::patch('halted-patient-request/{type}/{patient_request}', 'haltedPatientRequest');
         Route::patch('move-patient-request-from-processes/{type}/{patient_request}', 'movePatientRequestFromProcesses');
+        Route::patch('move-patient-request-from-archive/{type}/{patient_request}', 'movePatientRequestFromArchive');
         Route::patch('move-patient-request-from-others/{type}/{patient_request}', 'movePatientRequestFromOthers');
+        Route::patch('finish-back-patient-request/{type}/{patient_request}', 'finishBackPatientRequest');
         Route::get('get-history-patient-requests/{report}/{patient_request}', 'getHistoryPatientRequests');
         Route::get('get-cost-assistance-professionals', 'getCostAssistanceProfessionals');
         Route::get('get-travel-professionals', 'getTravelProfessionals');
@@ -152,11 +158,13 @@ Route::middleware(['api', Auth::class])
     ->controller(TravelController::class)
     ->group(function () {
         Route::get('get-patient-requests', 'getPatientRequests');
+        Route::get('get-archive-patient-requests', 'getArchivePatientRequests');
         Route::patch('halted-patient-request/{patient_request}', 'haltedPatientRequest');
         Route::get('get-patient-escorts/{patient_care}', 'getPatientEscorts');
         Route::patch('undo-patient-request/{patient_request}', 'undoPatientRequest');
-        Route::patch('finish-patient-request-travel/{patient_request}', 'finishPatientRequestTravel');
+        Route::patch('archive-patient-request/{patient_request}', 'archivePatientRequest');
         Route::patch('move-patient-request-from-finished/{patient_request}', 'movePatientRequestFromFinished');
+        Route::patch('move-patient-request-from-archive/{patient_request}', 'movePatientRequestFromArchive');
         Route::patch('move-patient-request-from-others/{patient_request}', 'movePatientRequestFromOthers');
         Route::post('import-travels', 'importTravels');
         Route::get('get-travels/{patient_request}', 'getTravels');
@@ -171,6 +179,7 @@ Route::middleware(['api', Auth::class])
         Route::post('create-travel-route/{travel}', 'createTravelRoute');
         Route::patch('update-travel-route/{travel_route}', 'updateTravelRoute');
         Route::delete('delete-travel-route/{travel_route}', 'deleteTravelRoute');
+        Route::patch('finish-back-patient-request/{patient_request}', 'finishBackPatientRequest');
     });
 
 Route::middleware(['api', Auth::class])
@@ -196,6 +205,7 @@ Route::middleware(['api', Auth::class])
         Route::patch('undo-patient-request/{patient_request}', 'undoPatientRequest');
         Route::get('get-payment-professionals', 'getPaymentProfessionals');
         Route::patch('process-patient-request-to-payment/{patient_request}', 'processPatientRequestToPayment');
+        Route::patch('finish-back-patient-request/{patient_request}', 'finishBackPatientRequest');
     });
 
 Route::middleware(['api', Auth::class])
@@ -203,6 +213,7 @@ Route::middleware(['api', Auth::class])
     ->controller(AccountabilityController::class)
     ->group(function () {
         Route::get('get-patient-requests', 'getPatientRequests');
+        Route::get('get-archive-patient-requests', 'getArchivePatientRequests');
         Route::patch('halted-patient-request/{patient_request}', 'haltedPatientRequest');
         Route::get('get-accountabilities/{patient_request}', 'getAccountabilities');
         Route::get('get-balance/{patient_care}', 'getBalance');
@@ -213,18 +224,24 @@ Route::middleware(['api', Auth::class])
         Route::post('create-accountability-daily/{accountability}', 'createAccountabilityDaily');
         Route::patch('update-accountability-daily/{accountability_daily}', 'updateAccountabilityDaily');
         Route::delete('delete-accountability-daily/{accountability_daily}', 'deleteAccountabilityDaily');
-        Route::patch('finish-patient-request-accountability/{patient_request}', 'finishPatientRequestAccountability');
+        Route::patch('archive-patient-request/{patient_request}', 'archivePatientRequest');
+        Route::patch('move-patient-request-from-archive/{patient_request}', 'movePatientRequestFromArchive');
     });
 
 Route::middleware(['api', Auth::class])
     ->prefix('payment')
     ->controller(PaymentController::class)
     ->group(function () {
-        Route::get('get-patient-requests', 'getPatientRequests');
+        Route::get('get-payments', 'getPayments');
+        Route::get('get-archive-patient-requests', 'getArchivePatientRequests');
         Route::patch('halted-patient-request/{patient_request}', 'haltedPatientRequest');
-        Route::post('payment-info/{patient_request}', 'paymentInfo');
+        Route::patch('update-payment/{payment}', 'updatePayment');
         Route::patch('finish-patient-request-payment/{patient_request}', 'finishPatientRequestPayment');
         Route::patch('undo-patient-request/{patient_request}', 'undoPatientRequest');
+        Route::patch('archive-patient-request/{patient_request}', 'archivePatientRequest');
+        Route::patch('move-patient-request-from-archive/{patient_request}', 'movePatientRequestFromArchive');
+        Route::get('download-merged-pdf/{payment}', 'downloadMergedPdf');
+        Route::get('download-memo-pdf/{payment}', 'downloadMemoPdf');
     });
 
 // CHECKS
@@ -232,6 +249,8 @@ Route::middleware(['api', Auth::class])
     ->prefix('checks')
     ->group(function () {
         // Patient Checks
+        Route::get('get-patient-cns/{cns}', [PatientController::class, 'getPatientCns']);
+        Route::get('get-patient-document/{document}', [PatientController::class, 'getPatientDocument']);
         Route::get('get-escort-cns/{cns}', [PatientController::class, 'getEscortCns']);
         Route::get('get-escort-document/{document}', [PatientController::class, 'getEscortDocument']);
     });
@@ -241,13 +260,15 @@ Route::middleware(['api', Auth::class])
     ->prefix('validator')
     ->group(function () {
         // User Validators
-        Route::get('email-user-exists/{email}/{data}', [UserController::class, 'emailUserExists']);
-        Route::get('cns-user-exists/{cns}/{data}', [UserController::class, 'cnsUserExists']);
+        Route::get('email-user-exists/{email}/{data?}', [UserController::class, 'emailUserExists']);
+        Route::get('cns-user-exists/{cns}/{data?}', [UserController::class, 'cnsUserExists']);
         // Patient Validators
-        Route::get('cns-patient-exists/{cns}/{data}', [PatientController::class, 'cnsPatientExists']);
-        Route::get('cns-escort-exists/{patient_care}/{cns}/{data}', [PatientController::class, 'cnsEscortExists']);
-        Route::get('document-patient-exists/{document}/{data}', [PatientController::class, 'documentPatientExists']);
-        Route::get('document-escort-exists/{patient_care}/{document}/{data}', [PatientController::class, 'documentEscortExists']);
+        Route::get('cns-patient-exists/{cns}/{data?}', [PatientController::class, 'cnsPatientExists']);
+        Route::get('cns-escort-exists/{patient_care}/{cns}/{data?}', [PatientController::class, 'cnsEscortExists']);
+        Route::get('document-patient-exists/{document}/{data?}', [PatientController::class, 'documentPatientExists']);
+        Route::get('document-escort-exists/{patient_care}/{document}/{data?}', [PatientController::class, 'documentEscortExists']);
+        // Travel Validators
+        Route::get('passenger-exists/{travel}', [TravelController::class, 'passengerExists']);
     });
 
 
