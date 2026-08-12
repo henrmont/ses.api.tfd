@@ -18,10 +18,7 @@ class UserController extends Controller
         $this->authorize('tfd/usuário listar');
         $users = User::query()
             ->tfd()
-            ->with(['modules' => function($q) {
-                $q->where('name','tfd');
-            },
-            'roles','professional'])
+            ->with('roles','professional')
             ->whereNot('email','admin@tfd.com')
             ->orderBy('id','desc')
             ->get();

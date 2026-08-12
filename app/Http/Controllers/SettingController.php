@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BudgetAllocation;
 use App\Models\DailyCost;
 use App\Services\SettingService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -24,5 +25,20 @@ class SettingController extends Controller
     {
         $this->authorize('tfd/configuração atualizar');
         return $settingService->updateDailyCost($daily_cost, $request);
+    }
+
+    public function getBudgetAllocation()
+    {
+        $this->authorize('tfd/configuração listar');
+        $budget_allocation = BudgetAllocation::query()
+            ->orderBy('id', 'asc')
+            ->first();
+        return response()->json($budget_allocation, 200);
+    }
+
+    public function updateBudgetAllocation(BudgetAllocation $budget_allocation, Request $request, SettingService $settingService)
+    {
+        $this->authorize('tfd/configuração atualizar');
+        return $settingService->updateBudgetAllocation($budget_allocation, $request);
     }
 }

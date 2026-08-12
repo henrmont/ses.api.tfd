@@ -213,53 +213,93 @@ class PatientController extends Controller
     }
 
     // validators
-    public function cnsPatientExists($cns, $data = null)
+    public function cnsPatientExists($cns, $cns_to_compare = null)
     {
         $this->authorize('tfd/paciente listar');
-        $exists = Patient::query()
+
+        $clean_cns = preg_replace('/\D/', '', $cns);
+        $clean_cns_to_compare = $cns_to_compare ? preg_replace('/\D/', '', $cns_to_compare) : null;
+
+        $query = Patient::query()
             ->whereHas('patientCares', function ($q) {
                 $q->tfd();
             })
-            ->where('cns', $cns);
-        if ($data)
-            $exists->whereNot('cns', $data);
-        $exists = $exists->exists();
-        return response()->json($exists, 200);
+            ->where('cns', $clean_cns);
+
+        if ($clean_cns_to_compare) {
+            $query->where('cns', '!=', $clean_cns_to_compare);
+        }
+
+        $exists = $query->exists();
+
+        return response()->json([
+            'cnsExists' => $exists
+        ], 200);
     }
 
-    public function cnsEscortExists(PatientCare $patient_care, $cns, $data = null)
-    {
-        $this->authorize('tfd/paciente acompanhantes');
-        $exists = $patient_care->escorts()
-            ->where('cns', $cns);
-        if ($data)
-            $exists->whereNot('cns', $data);
-        $exists = $exists->exists();
-        return response()->json($exists, 200);
-    }
-
-    public function documentPatientExists($document, $data = null)
+    public function cnsEscortExists(PatientCare $patient_care, $cns, $cns_to_compare = null)
     {
         $this->authorize('tfd/paciente listar');
-        $exists = Patient::query()
+
+        $clean_cns = preg_replace('/\D/', '', $cns);
+        $clean_cns_to_compare = $cns_to_compare ? preg_replace('/\D/', '', $cns_to_compare) : null;
+
+        $query = $patient_care->escorts()
+            ->where('cns', $clean_cns);
+
+        if ($clean_cns_to_compare) {
+            $query->where('cns', '!=', $clean_cns_to_compare);
+        }
+
+        $exists = $query->exists();
+
+        return response()->json([
+            'cnsExists' => $exists
+        ], 200);
+    }
+
+    public function documentPatientExists($document, $document_to_compare = null)
+    {
+        $this->authorize('tfd/paciente listar');
+
+        $clean_document = preg_replace('/\D/', '', $document);
+        $clean_document_to_compare = $document_to_compare ? preg_replace('/\D/', '', $document_to_compare) : null;
+
+        $query = Patient::query()
             ->whereHas('patientCares', function ($q) {
                 $q->tfd();
             })
-            ->where('document', $document);
-        if ($data)
-            $exists->whereNot('document', $data);
-        $exists = $exists->exists();
-        return response()->json($exists, 200);
+            ->where('document', $clean_document);
+
+        if ($clean_document_to_compare) {
+            $query->where('document', '!=', $clean_document_to_compare);
+        }
+
+        $exists = $query->exists();
+
+        return response()->json([
+            'documentExists' => $exists
+        ], 200);
     }
 
-    public function documentEscortExists(PatientCare $patient_care, $document, $data = null)
+    public function documentEscortExists(PatientCare $patient_care, $document, $document_to_compare = null)
     {
         $this->authorize('tfd/paciente acompanhantes');
-        $exists = $patient_care->escorts()
-            ->where('document', $document);
-        if ($data)            
-            $exists->whereNot('document', $data);
-        $exists = $exists->exists();
-        return response()->json($exists, 200);
+
+        $clean_document = preg_replace('/\D/', '', $document);
+        $clean_document_to_compare = $document_to_compare ? preg_replace('/\D/', '', $document_to_compare) : null;
+
+        $query = $patient_care->escorts()
+            ->where('document', $clean_document);
+
+        if ($clean_document_to_compare) {
+            $query->where('document', '!=', $clean_document_to_compare);
+        }
+
+        $exists = $query->exists();
+
+        return response()->json([
+            'documentExists' => $exists
+        ], 200);
     }
 }

@@ -64,6 +64,8 @@ Route::middleware(['api', Auth::class])
     ->group(function () {
         Route::get('get-daily-costs', 'getDailyCosts');
         Route::patch('update-daily-cost/{daily_cost}', 'updateDailyCost');
+        Route::get('get-budget-allocation', 'getBudgetAllocation');
+        Route::patch('update-budget-allocation/{budget_allocation}', 'updateBudgetAllocation');
     });
 
 Route::middleware(['api', Auth::class])
