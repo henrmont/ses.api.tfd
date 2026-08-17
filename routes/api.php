@@ -142,7 +142,7 @@ Route::middleware(['api', Auth::class])
         Route::delete('{patient_request}', 'deletePatientRequest')->name('destroy');
 
         // Ações de estado e movimentações
-        Route::patch('{patient_request}/halt', 'haltedPatientRequest')->name('halt');
+        Route::patch('{patient_request}/halted', 'haltedPatientRequest')->name('halt');
         Route::patch('{patient_request}/process-to-medical', 'processPatientRequestToMedical')->name('process-to-medical');
         Route::patch('{patient_request}/move-from-processes', 'movePatientRequestFromProcesses')->name('move-from-processes');
         Route::patch('{patient_request}/move-from-others', 'movePatientRequestFromOthers')->name('move-from-others');
@@ -172,29 +172,39 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('opinion')
+    ->prefix('opinions')
+    ->name('opinions.')
     ->controller(OpinionController::class)
     ->group(function () {
-        Route::get('get-patient-requests', 'getPatientRequests');
-        Route::get('get-archive-patient-requests', 'getArchivePatientRequests');
-        Route::get('get-type', 'getType');
-        Route::get('get-social-professionals', 'getSocialProfessionals');
-        Route::get('get-opinions/{patient_request}', 'getOpinions');
-        Route::post('create-opinion/{patient_request}', 'createOpinion');
-        Route::patch('update-opinion/{opinion}', 'updateOpinion');
-        Route::delete('delete-opinion/{opinion}', 'deleteOpinion');
-        Route::patch('process-patient-request-to-social/{patient_request}', 'processPatientRequestToSocial');
-        Route::patch('undo-patient-request/{patient_request}', 'undoPatientRequest');
-        Route::patch('archive-patient-request/{patient_request}', 'archivePatientRequest');
-        Route::patch('halted-patient-request/{type}/{patient_request}', 'haltedPatientRequest');
-        Route::patch('move-patient-request-from-processes/{type}/{patient_request}', 'movePatientRequestFromProcesses');
-        Route::patch('move-patient-request-from-archive/{type}/{patient_request}', 'movePatientRequestFromArchive');
-        Route::patch('move-patient-request-from-others/{type}/{patient_request}', 'movePatientRequestFromOthers');
-        Route::patch('finish-back-patient-request/{type}/{patient_request}', 'finishBackPatientRequest');
-        Route::get('get-history-patient-requests/{report}/{patient_request}', 'getHistoryPatientRequests');
-        Route::get('get-cost-assistance-professionals', 'getCostAssistanceProfessionals');
-        Route::get('get-travel-professionals', 'getTravelProfessionals');
-        Route::patch('process-patient-request-to-cost-assistance-and-travel/{patient_request}', 'processPatientRequestToCostAssistanceAndTravel');
+        // Consultas e listagens principais
+        Route::get('patient-requests', 'getPatientRequests')->name('patient-requests.index');
+        Route::get('patient-requests/archived', 'getArchivePatientRequests')->name('patient-requests.archived');
+        Route::get('professional-type', 'getType')->name('professional-type');
+        Route::get('reports/{report}/patient-requests/{patient_request}/history', 'getHistoryPatientRequests')->name('patient-requests.history');
+
+        // CRUD do Parecer (Opinions)
+        Route::get('patient-requests/{patient_request}', 'getOpinions')->name('index');
+        Route::post('patient-requests/{patient_request}', 'createOpinion')->name('store');
+        Route::patch('{opinion}', 'updateOpinion')->name('update');
+        Route::delete('{opinion}', 'deleteOpinion')->name('destroy');
+
+        // Tramitações e processamentos de solicitações
+        Route::patch('patient-requests/{patient_request}/process-to-social', 'processPatientRequestToSocial')->name('patient-requests.process-to-social');
+        Route::patch('patient-requests/{patient_request}/process-to-cost-and-travel', 'processPatientRequestToCostAssistanceAndTravel')->name('patient-requests.process-to-cost-and-travel');
+        Route::patch('patient-requests/{patient_request}/undo', 'undoPatientRequest')->name('patient-requests.undo');
+        Route::patch('patient-requests/{patient_request}/finish-back/{type}', 'finishBackPatientRequest')->name('patient-requests.finish-back');
+
+        // Ações de estado, movimentações e arquivamento
+        Route::patch('patient-requests/{patient_request}/archive', 'archivePatientRequest')->name('patient-requests.archive');
+        Route::patch('patient-requests/{patient_request}/halted/{type}', 'haltedPatientRequest')->name('patient-requests.halt');
+        Route::patch('patient-requests/{patient_request}/move-from-processes/{type}', 'movePatientRequestFromProcesses')->name('patient-requests.move-from-processes');
+        Route::patch('patient-requests/{patient_request}/move-from-archive/{type}', 'movePatientRequestFromArchive')->name('patient-requests.move-from-archive');
+        Route::patch('patient-requests/{patient_request}/move-from-others/{type}', 'movePatientRequestFromOthers')->name('patient-requests.move-from-others');
+
+        // Consultas de profissionais auxiliares
+        Route::get('social-professionals', 'getSocialProfessionals')->name('social-professionals.index');
+        Route::get('cost-assistance-professionals', 'getCostAssistanceProfessionals')->name('cost-assistance-professionals.index');
+        Route::get('travel-professionals', 'getTravelProfessionals')->name('travel-professionals.index');
     });
 
 Route::middleware(['api', Auth::class])

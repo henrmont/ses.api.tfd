@@ -473,23 +473,6 @@ class PatientRequestService
     | Arquivamento de Etapas
     |--------------------------------------------------------------------------
     */
-
-    /**
-     * Arquivar parecer da solicitação.
-     */
-    public function archiveOpinionPatientRequest(PatientRequest $patient_request): JsonResponse
-    {
-        try {
-            $patient_request->update(['is_opinion_archived' => true]);
-
-            return response()->json(['message' => 'Solicitação arquivada com sucesso.'], JsonResponse::HTTP_OK);
-        } catch (Exception $e) {
-            Log::error('Erro ao arquivar parecer da solicitação: ' . $e->getMessage());
-
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
-        }
-    }
-
     /**
      * Arquivar etapa de viagem da solicitação.
      */

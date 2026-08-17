@@ -9,175 +9,343 @@ use App\Models\Report;
 use App\Services\OpinionService;
 use App\Services\PatientRequestService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class OpinionController extends Controller
 {
     use AuthorizesRequests;
 
-    public function getPatientRequests()
+    public function __construct(
+        protected OpinionService $opinionService,
+        protected PatientRequestService $patientRequestService
+    ) {}
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gestão de Pareceres e Solicitações do TFD
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Listar solicitações pendentes de parecer/tramitação.
+     */
+    public function getPatientRequests(): JsonResponse
     {
         $this->authorize('tfd/parecer listar');
-        $patient_requests = PatientRequest::query()
+
+        $userProfessionalId = Professional::where('user_id', auth()->id())->value('id');
+
+        $patientRequests = PatientRequest::query()
             ->notPatientBack()
-            ->where(function ($query) {
+            ->where(function ($query) use ($userProfessionalId) {
                 $query->whereNull('back_to_owner')
-                    ->orWhere('back_from_cost_assistance', Professional::where('user_id', auth()->user()->id)->first()->id)
-                    ->orWhere('back_from_travel', Professional::where('user_id', auth()->user()->id)->first()->id);
+                    ->orWhere('back_from_cost_assistance', $userProfessionalId)
+                    ->orWhere('back_from_travel', $userProfessionalId);
             })
             ->where('is_opinion_archived', false)
-            ->with('report.patientCare.patient','report.patientCare.user.professional','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
-            ->orderBy('id','desc')
+            ->with([
+                'report.patientCare.patient',
+                'report.patientCare.user.professional',
+                'report.cid',
+                'report.attachments',
+                'attachments',
+                'hospitalUnity',
+                'medicalProfessional',
+                'ownerProfessional',
+                'socialProfessional',
+                'travelProfessional',
+                'costAssistanceProfessional',
+                'accountabilityProfessional',
+                'travels.passengers.patient',
+                'travels.passengers.escort',
+                'costAssistances.costAssistanceDailies.dailyCost',
+                'accountabilities.accountabilityDailies.dailyCost',
+            ])
+            ->latest('id')
             ->get();
-        return response()->json($patient_requests, 200);
+
+        return response()->json($patientRequests, JsonResponse::HTTP_OK);
     }
 
-    public function getArchivePatientRequests()
+    /**
+     * Listar solicitações arquivadas na aba de pareceres.
+     */
+    public function getArchivePatientRequests(): JsonResponse
     {
         $this->authorize('tfd/parecer listar');
-        $patient_requests = PatientRequest::query()
+
+        $patientRequests = PatientRequest::query()
             ->notPatientBack()
             ->whereNull('back_to_owner')
             ->where('is_opinion_archived', true)
-            ->with('report.patientCare.patient','report.patientCare.user.professional','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
-            ->orderBy('id','desc')
+            ->with([
+                'report.patientCare.patient',
+                'report.patientCare.user.professional',
+                'report.cid',
+                'report.attachments',
+                'attachments',
+                'hospitalUnity',
+                'medicalProfessional',
+                'ownerProfessional',
+                'socialProfessional',
+                'travelProfessional',
+                'costAssistanceProfessional',
+                'accountabilityProfessional',
+                'travels.passengers.patient',
+                'travels.passengers.escort',
+                'costAssistances.costAssistanceDailies.dailyCost',
+                'accountabilities.accountabilityDailies.dailyCost',
+            ])
+            ->latest('id')
             ->get();
-        return response()->json($patient_requests, 200);
+
+        return response()->json($patientRequests, JsonResponse::HTTP_OK);
     }
 
-    public function getType()
+    /**
+     * Retornar o tipo/perfil do profissional autenticado.
+     */
+    public function getType(): JsonResponse
     {
         $this->authorize('tfd/parecer listar');
-        $type = Professional::query()
-            ->where('user_id',auth()->user()->id)
-            ->first()->type;
-        return response()->json($type, 200);
+
+        $type = Professional::where('user_id', auth()->id())->value('type');
+
+        return response()->json($type, JsonResponse::HTTP_OK);
     }
 
-    public function getSocialProfessionals()
+    /**
+     * Listar pareceres emitidos de uma solicitação específica.
+     */
+    public function getOpinions(PatientRequest $patient_request): JsonResponse
     {
         $this->authorize('tfd/parecer listar');
-        $social_profissionals = Professional::query()
-            ->with('user')
-            ->withCount('patientSocialRequests')
-            ->where('type','Assistente Social')
-            ->get();
-        return response()->json($social_profissionals, 200);
-    }
 
-    public function getOpinions(PatientRequest $patient_request)
-    {
-        $this->authorize('tfd/parecer listar');
         $opinions = $patient_request->opinions()
-            ->with('patientRequest.report.patientCare','professional')
-            ->orderBy('id','asc')
+            ->with('patientRequest.report.patientCare', 'professional')
+            ->oldest('id')
             ->get();
-        return response()->json($opinions, 200);
+
+        return response()->json($opinions, JsonResponse::HTTP_OK);
     }
 
-    public function createOpinion(PatientRequest $patient_request, Request $request, OpinionService $opinionService)
+    /**
+     * Criar parecer técnico em uma solicitação.
+     */
+    public function createOpinion(PatientRequest $patient_request, Request $request)
     {
         $this->authorize('tfd/parecer criar');
-        return $opinionService->createOpinion($patient_request, $request);
+
+        return $this->opinionService->createOpinion($patient_request, $request);
     }
 
-    public function updateOpinion(Opinion $opinion, Request $request, OpinionService $opinionService)
+    /**
+     * Atualizar parecer técnico existente.
+     */
+    public function updateOpinion(Opinion $opinion, Request $request)
     {
         $this->authorize('tfd/parecer atualizar');
-        return $opinionService->updateOpinion($opinion, $request);
+
+        return $this->opinionService->updateOpinion($opinion, $request);
     }
 
-    public function deleteOpinion(Opinion $opinion, OpinionService $opinionService)
+    /**
+     * Excluir parecer técnico.
+     */
+    public function deleteOpinion(Opinion $opinion)
     {
         $this->authorize('tfd/parecer deletar');
-        return $opinionService->deleteOpinion($opinion);
+
+        return $this->opinionService->deleteOpinion($opinion);
     }
 
-    public function processPatientRequestToSocial(PatientRequest $patient_request, Request $request, OpinionService $opinionService)
-    {
-        $this->authorize('tfd/parecer atualizar');
-        return $opinionService->processPatientRequestToSocial($patient_request, $request);
-    }
-
-    public function undoPatientRequest(PatientRequest $patient_request, Request $request, PatientRequestService $patientRequestService)
-    {
-        $this->authorize('tfd/parecer atualizar');
-        return $patientRequestService->undoPatientRequest($patient_request, $request);
-    }
-
-    public function archivePatientRequest(PatientRequest $patient_request, PatientRequestService $patientRequestService)
-    {
-        $this->authorize('tfd/parecer atualizar');
-        return $patientRequestService->archiveOpinionPatientRequest($patient_request);
-    }
-
-    public function haltedPatientRequest($type, PatientRequest $patient_request, OpinionService $opinionService)
-    {
-        $this->authorize('tfd/parecer atualizar');
-        return $opinionService->haltedPatientRequest($type, $patient_request);
-    }
-
-    public function movePatientRequestFromProcesses($type, PatientRequest $patient_request, OpinionService $opinionService)
-    {
-        $this->authorize('tfd/parecer atualizar');
-        return $opinionService->movePatientRequestFromProcesses($type, $patient_request);
-    }
-
-    public function movePatientRequestFromArchive($type, PatientRequest $patient_request, OpinionService $opinionService)
-    {
-        $this->authorize('tfd/parecer atualizar');
-        return $opinionService->movePatientRequestFromArchive($type, $patient_request);
-    }
-
-    public function movePatientRequestFromOthers($type, PatientRequest $patient_request, OpinionService $opinionService)
-    {
-        $this->authorize('tfd/parecer atualizar');
-        return $opinionService->movePatientRequestFromOthers($type, $patient_request);
-    }
-
-    public function getHistoryPatientRequests(Report $report, PatientRequest $patient_request)
+    /**
+     * Consultar o histórico das solicitações vinculadas a um laudo.
+     */
+    public function getHistoryPatientRequests(Report $report, PatientRequest $patient_request): JsonResponse
     {
         $this->authorize('tfd/parecer listar');
-        $patient_requests = $report->patientRequests()
+
+        $patientRequests = $report->patientRequests()
             ->whereNot('id', $patient_request->id)
-            ->with('opinions','report.patientCare.patient','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
-            ->orderBy('id','asc')
+            ->with([
+                'opinions',
+                'report.patientCare.patient',
+                'report.cid',
+                'report.attachments',
+                'attachments',
+                'hospitalUnity',
+                'medicalProfessional',
+                'ownerProfessional',
+                'socialProfessional',
+                'travelProfessional',
+                'costAssistanceProfessional',
+                'accountabilityProfessional',
+                'travels.passengers.patient',
+                'travels.passengers.escort',
+                'costAssistances.costAssistanceDailies.dailyCost',
+                'accountabilities.accountabilityDailies.dailyCost',
+            ])
+            ->oldest('id')
             ->get();
-        return response()->json($patient_requests, 200);
+
+        return response()->json($patientRequests, JsonResponse::HTTP_OK);
     }
 
-    public function getCostAssistanceProfessionals()
+    /*
+    |--------------------------------------------------------------------------
+    | Encaminhamentos e Tramitações de Processo
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Encaminhar solicitação para o Serviço Social (Assistente Social).
+     */
+    public function processPatientRequestToSocial(PatientRequest $patient_request, Request $request)
+    {
+        $this->authorize('tfd/parecer atualizar');
+
+        return $this->opinionService->processPatientRequestToSocial($patient_request, $request);
+    }
+
+    /**
+     * Encaminhar solicitação para Ajuda de Custo e/ou Passagem.
+     */
+    public function processPatientRequestToCostAssistanceAndTravel(PatientRequest $patient_request, Request $request)
+    {
+        $this->authorize('tfd/parecer atualizar');
+
+        return $this->opinionService->processPatientRequestToCostAssistanceAndTravel($patient_request, $request);
+    }
+
+    /**
+     * Devolver/restaurar fluxo de solicitação.
+     */
+    public function undoPatientRequest(PatientRequest $patient_request, Request $request)
+    {
+        $this->authorize('tfd/parecer atualizar');
+
+        return $this->patientRequestService->undoPatientRequest($patient_request, $request);
+    }
+
+    /**
+     * Finalizar a devolução da solicitação.
+     */
+    public function finishBackPatientRequest(PatientRequest $patient_request, string $type)
+    {
+        $this->authorize('tfd/parecer atualizar');
+
+        return $this->opinionService->finishBackPatientRequest($patient_request, $type);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Movimentações e Arquivamento
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Arquivar solicitação no módulo de pareceres.
+     */
+    public function archivePatientRequest(PatientRequest $patient_request)
+    {
+        $this->authorize('tfd/parecer atualizar');
+
+        return $this->opinionService->archivePatientRequest($patient_request);
+    }
+
+    /**
+     * Sobrestar/paralisar a solicitação no fluxo do parecer.
+     */
+    public function haltedPatientRequest(PatientRequest $patient_request, string $type)
+    {
+        $this->authorize('tfd/parecer atualizar');
+
+        return $this->opinionService->haltedPatientRequest($patient_request, $type);
+    }
+
+    /**
+     * Mover solicitação a partir da aba de processos.
+     */
+    public function movePatientRequestFromProcesses(PatientRequest $patient_request, string $type)
+    {
+        $this->authorize('tfd/parecer atualizar');
+
+        return $this->opinionService->movePatientRequestFromProcesses($patient_request, $type);
+    }
+
+    /**
+     * Mover solicitação a partir do arquivo.
+     */
+    public function movePatientRequestFromArchive(PatientRequest $patient_request, string $type)
+    {
+        $this->authorize('tfd/parecer atualizar');
+
+        return $this->opinionService->movePatientRequestFromArchive($patient_request, $type);
+    }
+
+    /**
+     * Mover solicitação a partir do setor "Outros".
+     */
+    public function movePatientRequestFromOthers(PatientRequest $patient_request, string $type)
+    {
+        $this->authorize('tfd/parecer atualizar');
+
+        return $this->opinionService->movePatientRequestFromOthers($patient_request, $type);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Auxiliares de Consulta para Profissionais
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Listar profissionais da Assistência Social.
+     */
+    public function getSocialProfessionals(): JsonResponse
     {
         $this->authorize('tfd/parecer listar');
-        $cost_assistance_profissionals = Professional::query()
+
+        $socialProfessionals = Professional::query()
+            ->with('user')
+            ->withCount('patientSocialRequests')
+            ->where('type', 'Assistente Social')
+            ->get();
+
+        return response()->json($socialProfessionals, JsonResponse::HTTP_OK);
+    }
+
+    /**
+     * Listar profissionais do setor de Ajuda de Custo.
+     */
+    public function getCostAssistanceProfessionals(): JsonResponse
+    {
+        $this->authorize('tfd/parecer listar');
+
+        $costAssistanceProfessionals = Professional::query()
             ->with('user')
             ->withCount('patientCostAssistanceRequests')
-            ->where('type','Ajuda de Custo')
+            ->where('type', 'Ajuda de Custo')
             ->get();
-        return response()->json($cost_assistance_profissionals, 200);
+
+        return response()->json($costAssistanceProfessionals, JsonResponse::HTTP_OK);
     }
 
-    public function getTravelProfessionals()
+    /**
+     * Listar profissionais do setor de Passagem/Viagem.
+     */
+    public function getTravelProfessionals(): JsonResponse
     {
         $this->authorize('tfd/parecer listar');
-        $travel_profissionals = Professional::query()
+
+        $travelProfessionals = Professional::query()
             ->with('user')
             ->withCount('patientTravelRequests')
-            ->where('type','Passagem')
+            ->where('type', 'Passagem')
             ->get();
-        return response()->json($travel_profissionals, 200);
-    }
 
-    public function processPatientRequestToCostAssistanceAndTravel(PatientRequest $patient_request, Request $request, OpinionService $opinionService)
-    {
-        $this->authorize('tfd/parecer atualizar');
-        return $opinionService->processPatientRequestToCostAssistanceAndTravel($patient_request, $request);
+        return response()->json($travelProfessionals, JsonResponse::HTTP_OK);
     }
-
-    public function finishBackPatientRequest($type, PatientRequest $patient_request, OpinionService $opinionService)
-    {
-        $this->authorize('tfd/parecer atualizar');
-        return $opinionService->finishBackPatientRequest($type, $patient_request);
-    }
-
 }
