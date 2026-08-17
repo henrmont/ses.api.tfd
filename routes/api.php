@@ -95,7 +95,7 @@ Route::middleware(['api', Auth::class])
         Route::get('/', 'getPatients')->name('index');
         Route::get('archived', 'getArchivePatients')->name('archived');
         Route::post('/', 'createPatient')->name('store');
-        Route::post('{patient_care}', 'updatePatient')->name('update'); // Mantido método post em virtude do upload de arquivos
+        Route::post('{patient_care}', 'updatePatient')->name('update'); // Mantido método POST para suporte a upload de arquivos
 
         // Ações de estado e movimentações
         Route::patch('{patient_care}/archive', 'archivePatient')->name('archive');
@@ -107,7 +107,7 @@ Route::middleware(['api', Auth::class])
         // Acompanhantes
         Route::get('{patient_care}/escorts', 'getPatientEscorts')->name('escorts.index');
         Route::post('{patient_care}/escorts', 'createPatientEscort')->name('escorts.store');
-        Route::post('escorts/{escort}', 'updatePatientEscort')->name('escorts.update'); // Mantido método post em virtude do upload de arquivos
+        Route::post('escorts/{escort}', 'updatePatientEscort')->name('escorts.update'); // Mantido método POST para suporte a upload de arquivos
         Route::delete('escorts/{patient_care_escort}', 'deletePatientEscort')->name('escorts.destroy');
 
         // Laudos e CIDs
@@ -120,7 +120,7 @@ Route::middleware(['api', Auth::class])
         // Anexos do laudo
         Route::get('reports/{report}/attachments', 'getReportAttachments')->name('reports.attachments.index');
         Route::post('reports/{report}/attachments', 'createReportAttachment')->name('reports.attachments.store');
-        Route::post('attachments/{report_attachment}', 'updateReportAttachment')->name('reports.attachments.update'); // Mantido método post em virtude do upload de arquivos
+        Route::post('attachments/{report_attachment}', 'updateReportAttachment')->name('reports.attachments.update'); // Mantido método POST para suporte a upload de arquivos
         Route::delete('attachments/{report_attachment}', 'deleteReportAttachment')->name('reports.attachments.destroy');
 
         // Consultas diretas (Utilizadas para autopreenchimento e validação)
@@ -131,27 +131,35 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('patient-request')
+    ->prefix('patient-requests')
+    ->name('patient-requests.')
     ->controller(PatientRequestController::class)
     ->group(function () {
-        Route::get('get-patient-requests', 'getPatientRequests');
-        Route::get('get-patients', 'getPatients');
-        Route::get('get-patient-reports/{patient_care}', 'getPatientReports');
-        Route::get('get-hospital-unities', 'getHospitalUnities');
-        Route::get('get-medical-professionals', 'getMedicalProfessionals');
-        Route::post('create-patient-request', 'createPatientRequest');
-        Route::patch('halted-patient-request/{patient_request}', 'haltedPatientRequest');
-        Route::patch('update-patient-request/{patient_request}', 'updatePatientRequest');
-        Route::delete('delete-patient-request/{patient_request}', 'deletePatientRequest');
-        Route::patch('process-patient-request-to-medical/{patient_request}', 'processPatientRequestToMedical');
-        Route::patch('move-patient-request-from-processes/{patient_request}', 'movePatientRequestFromProcesses');
-        Route::patch('move-patient-request-from-others/{patient_request}', 'movePatientRequestFromOthers');
-        Route::patch('move-patient-request-from-archive/{patient_request}', 'movePatientRequestFromArchive');
-        Route::patch('finish-back-patient-request/{patient_request}', 'finishBackPatientRequest');
-        Route::get('get-patient-request-attachments/{patient_request}', 'getPatientRequestAttachments');
-        Route::post('create-patient-request-attachment/{patient_request}', 'createPatientRequestAttachment');
-        Route::patch('update-patient-request-attachment/{patient_request_attachment}', 'updatePatientRequestAttachment');
-        Route::delete('delete-patient-request-attachment/{patient_request_attachment}', 'deletePatientRequestAttachment');
+        // Listagem e CRUD principal
+        Route::get('/', 'getPatientRequests')->name('index');
+        Route::post('/', 'createPatientRequest')->name('store');
+        Route::patch('{patient_request}', 'updatePatientRequest')->name('update');
+        Route::delete('{patient_request}', 'deletePatientRequest')->name('destroy');
+
+        // Ações de estado e movimentações
+        Route::patch('{patient_request}/halt', 'haltedPatientRequest')->name('halt');
+        Route::patch('{patient_request}/process-to-medical', 'processPatientRequestToMedical')->name('process-to-medical');
+        Route::patch('{patient_request}/move-from-processes', 'movePatientRequestFromProcesses')->name('move-from-processes');
+        Route::patch('{patient_request}/move-from-others', 'movePatientRequestFromOthers')->name('move-from-others');
+        Route::patch('{patient_request}/move-from-archive', 'movePatientRequestFromArchive')->name('move-from-archive');
+        Route::patch('{patient_request}/finish-back', 'finishBackPatientRequest')->name('finish-back');
+
+        // Anexos da solicitação
+        Route::get('{patient_request}/attachments', 'getPatientRequestAttachments')->name('attachments.index');
+        Route::post('{patient_request}/attachments', 'createPatientRequestAttachment')->name('attachments.store');
+        Route::post('attachments/{patient_request_attachment}', 'updatePatientRequestAttachment')->name('attachments.update'); // Mantido método POST para suporte a upload de arquivos
+        Route::delete('attachments/{patient_request_attachment}', 'deletePatientRequestAttachment')->name('attachments.destroy');
+
+        // Consultas e dados auxiliares
+        Route::get('patients', 'getPatients')->name('patients.index');
+        Route::get('patients/{patient_care}/reports', 'getPatientReports')->name('patients.reports.index');
+        Route::get('hospital-unities', 'getHospitalUnities')->name('hospital-unities.index');
+        Route::get('medical-professionals', 'getMedicalProfessionals')->name('medical-professionals.index');
     });
 
 Route::middleware(['api', Auth::class])

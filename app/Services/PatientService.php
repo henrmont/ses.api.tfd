@@ -122,7 +122,7 @@ class PatientService
             $this->core()->beginTransaction();
             $this->storage()->beginTransaction();
 
-            $patient = Patient::on('core')->findOrFail($patient_care->patient_id);
+            $patient = $patient_care->patient;
             $patient->update($request->except(['observation', 'control_number']));
 
             $this->processFileAttachments($patient, $request, [
