@@ -6,6 +6,7 @@ use App\Models\Professional;
 use App\Models\User;
 use App\Services\UserService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Role;
 
@@ -13,85 +14,136 @@ class UserController extends Controller
 {
     use AuthorizesRequests;
 
-    public function getUsers()
+    public function __construct(
+        protected UserService $userService
+    ) {}
+
+    /**
+     * Listar usuários do sistema TFD.
+     */
+    public function getUsers(): JsonResponse
     {
         $this->authorize('tfd/usuário listar');
+
         $users = User::query()
             ->tfd()
-            ->with('roles','professional')
-            ->whereNot('email','admin@tfd.com')
-            ->orderBy('id','desc')
+            ->with(['roles', 'professional'])
+            ->where('email', '!=', 'admin@tfd.com')
+            ->latest('id')
             ->get();
-        return response()->json($users, 200);
+
+        return response()->json($users, JsonResponse::HTTP_OK);
     }
 
-    public function getRoles()
+    /**
+     * Listar perfis/roles do TFD.
+     */
+    public function getRoles(): JsonResponse
     {
         $this->authorize('tfd/usuário listar');
+
         $roles = Role::query()
             ->with('permissions')
-            ->where('name','LIKE','tfd%')
+            ->where('name', 'LIKE', 'tfd%')
             ->get();
-        return response()->json($roles, 200);
+
+        return response()->json($roles, JsonResponse::HTTP_OK);
     }
 
-    public function createUser(Request $request, UserService $userService)
+    /**
+     * Criar um novo usuário.
+     */
+    public function createUser(Request $request)
     {
         $this->authorize('tfd/usuário criar');
-        return $userService->createUser($request);
+
+        return $this->userService->createUser($request);
     }
 
-    public function lockUser(User $user, UserService $userService)
+    /**
+     * Travar/Destravar edição de um usuário.
+     */
+    public function lockUser(User $user)
     {
         $this->authorize('tfd/usuário travar');
-        return $userService->lockUser($user);
+
+        return $this->userService->lockUser($user);
     }
 
-    public function validateUser(User $user, UserService $userService)
+    /**
+     * Validar/Invalidar status de um usuário.
+     */
+    public function validateUser(User $user)
     {
         $this->authorize('tfd/usuário validar');
-        return $userService->validateUser($user);
+
+        return $this->userService->validateUser($user);
     }
 
-    public function updateUser(User $user, Request $request, UserService $userService)
+    /**
+     * Atualizar dados de um usuário.
+     */
+    public function updateUser(User $user, Request $request)
     {
         $this->authorize('tfd/usuário atualizar');
-        return $userService->updateUser($user, $request);
+
+        return $this->userService->updateUser($user, $request);
     }
 
-    public function deleteUser(User $user, UserService $userService)
+    /**
+     * Excluir um usuário.
+     */
+    public function deleteUser(User $user)
     {
         $this->authorize('tfd/usuário deletar');
-        return $userService->deleteUser($user);
+
+        return $this->userService->deleteUser($user);
     }
 
-    public function rolesUser(User $user, Request $request, UserService $userService)
+    /**
+     * Atualizar as regras/permissões atribuídas ao usuário.
+     */
+    public function rolesUser(User $user, Request $request)
     {
         $this->authorize('tfd/usuário atualizar');
-        return $userService->rolesUser($user, $request);
+
+        return $this->userService->rolesUser($user, $request);
     }
 
-    // validators
-    public function emailUserExists($email, $data = null)
+    /*
+    |--------------------------------------------------------------------------
+    | Validadores Assíncronos (Existência de Registros)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Verifica se o e-mail informado já existe no banco.
+     */
+    public function emailUserExists(string $email, ?string $currentEmail = null): JsonResponse
     {
         $this->authorize('tfd/usuário listar');
+
         $exists = User::query()
             ->tfd()
-            ->where('email', $email);
-        if ($data)
-            $exists->whereNot('email', $data);
-        $exists = $exists->exists();
-        return response()->json($exists, 200);
+            ->where('email', $email)
+            ->when($currentEmail, fn ($query) => $query->where('email', '!=', $currentEmail))
+            ->exists();
+
+        return response()->json($exists, JsonResponse::HTTP_OK);
     }
 
-    public function cnsUserExists($cns, $data = null)
+    /**
+     * Verifica se o CNS informado já existe no banco.
+     */
+    public function cnsUserExists(string $cns, ?string $currentCns = null): JsonResponse
     {
         $this->authorize('tfd/usuário listar');
+
         $exists = Professional::query()
-            ->where('cns', $cns);
-        if ($data)
-            $exists->whereNot('cns', $data);
-        $exists = $exists->exists();
-        return response()->json($exists, 200);
+            ->where('cns', $cns)
+            ->when($currentCns, fn ($query) => $query->where('cns', '!=', $currentCns))
+            ->exists();
+
+        return response()->json($exists, JsonResponse::HTTP_OK);
     }
 }

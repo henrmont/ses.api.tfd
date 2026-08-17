@@ -17,28 +17,42 @@ use App\Http\Middleware\Auth;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['api', Auth::class])
-    ->prefix('user')
+    ->prefix('users')
+    ->name('users.')
     ->controller(UserController::class)
     ->group(function () {
-        Route::get('get-users', 'getUsers');
-        Route::get('get-roles', 'getRoles');
-        Route::post('create-user', 'createUser');
-        Route::patch('lock-user/{user}', 'lockUser');
-        Route::patch('validate-user/{user}', 'validateUser');
-        Route::patch('update-user/{user}', 'updateUser');
-        Route::delete('delete-user/{user}', 'deleteUser');
-        Route::patch('roles-user/{user}', 'rolesUser');
+        // Listagem
+        Route::get('/', 'getUsers')->name('index');
+        Route::get('roles', 'getRoles')->name('roles.index');
+
+        // CRUD principal
+        Route::post('/', 'createUser')->name('store');
+        Route::put('{user}', 'updateUser')->name('update');
+        Route::delete('{user}', 'deleteUser')->name('destroy');
+
+        // Ações de estado e relacionamentos
+        Route::patch('{user}/lock', 'lockUser')->name('lock');
+        Route::patch('{user}/validate', 'validateUser')->name('validate');
+        Route::patch('{user}/roles', 'rolesUser')->name('roles.update');
+
+        // Validações assíncronas (se declaradas no Controller)
+        Route::get('exists-email/{email}/{currentEmail?}', 'emailUserExists')->name('exists.email');
+        Route::get('exists-cns/{cns}/{currentCns?}', 'cnsUserExists')->name('exists.cns');
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('role')
+    ->prefix('roles')
+    ->name('roles.')
     ->controller(RoleController::class)
     ->group(function () {
-        Route::get('get-roles', 'getRoles');
-        Route::get('get-permissions', 'getPermissions');
-        Route::post('create-role', 'createRole');
-        Route::patch('update-role/{role}', 'updateRole');
-        Route::delete('delete-role/{role}', 'deleteRole');
+        // Listagens
+        Route::get('/', 'getRoles')->name('index');
+        Route::get('permissions', 'getPermissions')->name('permissions.index');
+
+        // CRUD principal
+        Route::post('/', 'createRole')->name('store');
+        Route::put('{role}', 'updateRole')->name('update');
+        Route::delete('{role}', 'deleteRole')->name('destroy');
     });
 
 Route::middleware(['api', Auth::class])
@@ -59,41 +73,61 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('setting')
+    ->prefix('settings')
+    ->name('settings.')
     ->controller(SettingController::class)
     ->group(function () {
-        Route::get('get-daily-costs', 'getDailyCosts');
-        Route::patch('update-daily-cost/{daily_cost}', 'updateDailyCost');
-        Route::get('get-budget-allocation', 'getBudgetAllocation');
-        Route::patch('update-budget-allocation/{budget_allocation}', 'updateBudgetAllocation');
+        // Custos de Diárias
+        Route::get('daily-costs', 'getDailyCosts')->name('daily-costs.index');
+        Route::patch('daily-costs/{daily_cost}', 'updateDailyCost')->name('daily-costs.update');
+
+        // Alocação Orçamentária
+        Route::get('budget-allocation', 'getBudgetAllocation')->name('budget-allocation.index');
+        Route::patch('budget-allocation/{budget_allocation}', 'updateBudgetAllocation')->name('budget-allocation.update');
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('patient')
+    ->prefix('patients')
+    ->name('patients.')
     ->controller(PatientController::class)
     ->group(function () {
-        Route::get('get-patients', 'getPatients');
-        Route::get('get-archive-patients', 'getArchivePatients');
-        Route::post('create-patient', 'createPatient');
-        Route::post('update-patient/{patient_care}', 'updatePatient');
-        Route::get('get-patient-escorts/{patient_care}', 'getPatientEscorts');
-        Route::post('create-patient-escort/{patient_care}', 'createPatientEscort');
-        Route::patch('update-patient-escort/{escort}', 'updatePatientEscort');
-        Route::delete('delete-patient-escort/{patient_care_escort}', 'deletePatientEscort');
-        Route::get('get-patient-reports/{patient_care}', 'getPatientReports');
-        Route::get('get-cids/{patient_care}', 'getCids');
-        Route::post('create-patient-report/{patient_care}', 'createPatientReport');
-        Route::patch('update-patient-report/{report}', 'updatePatientReport');
-        Route::delete('delete-patient-report/{report}', 'deletePatientReport');
-        Route::get('get-report-attachments/{report}', 'getReportAttachments');
-        Route::post('create-report-attachment/{report}', 'createReportAttachment');
-        Route::patch('update-report-attachment/{report_attachment}', 'updateReportAttachment');
-        Route::delete('delete-report-attachment/{report_attachment}', 'deleteReportAttachment');
-        Route::patch('archive-patient/{patient_care}', 'archivePatient');
-        Route::patch('move-patient-from-archive/{patient_care}', 'movePatientFromArchive');
-        Route::patch('move-patient-from-others/{patient_care}', 'movePatientFromOthers');
-        Route::patch('validate-patient/{patient_care}', 'validatePatient');
-        Route::patch('finish-back-patient/{patient_care}', 'finishBackPatient');
+        // Listagem e CRUD principal
+        Route::get('/', 'getPatients')->name('index');
+        Route::get('archived', 'getArchivePatients')->name('archived');
+        Route::post('/', 'createPatient')->name('store');
+        Route::post('{patient_care}', 'updatePatient')->name('update'); // Mantido método post em virtude do upload de arquivos
+
+        // Ações de estado e movimentações
+        Route::patch('{patient_care}/archive', 'archivePatient')->name('archive');
+        Route::patch('{patient_care}/move-from-archive', 'movePatientFromArchive')->name('unarchive');
+        Route::patch('{patient_care}/move-from-others', 'movePatientFromOthers')->name('transfer-to-me');
+        Route::patch('{patient_care}/validate', 'validatePatient')->name('validate');
+        Route::patch('{patient_care}/finish-back', 'finishBackPatient')->name('finish-return');
+
+        // Acompanhantes
+        Route::get('{patient_care}/escorts', 'getPatientEscorts')->name('escorts.index');
+        Route::post('{patient_care}/escorts', 'createPatientEscort')->name('escorts.store');
+        Route::post('escorts/{escort}', 'updatePatientEscort')->name('escorts.update'); // Mantido método post em virtude do upload de arquivos
+        Route::delete('escorts/{patient_care_escort}', 'deletePatientEscort')->name('escorts.destroy');
+
+        // Laudos e CIDs
+        Route::get('{patient_care}/reports', 'getPatientReports')->name('reports.index');
+        Route::get('{patient_care}/cids', 'getCids')->name('cids.index');
+        Route::post('{patient_care}/reports', 'createPatientReport')->name('reports.store');
+        Route::patch('reports/{report}', 'updatePatientReport')->name('reports.update');
+        Route::delete('reports/{report}', 'deletePatientReport')->name('reports.destroy');
+
+        // Anexos do laudo
+        Route::get('reports/{report}/attachments', 'getReportAttachments')->name('reports.attachments.index');
+        Route::post('reports/{report}/attachments', 'createReportAttachment')->name('reports.attachments.store');
+        Route::post('attachments/{report_attachment}', 'updateReportAttachment')->name('reports.attachments.update'); // Mantido método post em virtude do upload de arquivos
+        Route::delete('attachments/{report_attachment}', 'deleteReportAttachment')->name('reports.attachments.destroy');
+
+        // Consultas diretas (Utilizadas para autopreenchimento e validação)
+        Route::get('cns/{cns}', 'getPatientCns')->name('search.cns');
+        Route::get('document/{document}', 'getPatientDocument')->name('search.document');
+        Route::get('escorts/cns/{cns}', 'getEscortCns')->name('escorts.search.cns');
+        Route::get('escorts/document/{document}', 'getEscortDocument')->name('escorts.search.document');
     });
 
 Route::middleware(['api', Auth::class])

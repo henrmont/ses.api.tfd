@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\RoleService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -12,41 +13,67 @@ class RoleController extends Controller
 {
     use AuthorizesRequests;
 
-    public function getRoles()
+    public function __construct(
+        protected RoleService $roleService
+    ) {}
+
+    /**
+     * Listar todas as regras do módulo TFD.
+     */
+    public function getRoles(): JsonResponse
     {
         $this->authorize('tfd/regra listar');
+
         $roles = Role::query()
             ->with('permissions')
-            ->where('name','LIKE','tfd%')
-            ->orderBy('id','desc')
+            ->where('name', 'LIKE', 'tfd%')
+            ->orderBy('id', 'desc')
             ->get();
-        return response()->json($roles, 200);
+
+        return response()->json($roles, JsonResponse::HTTP_OK);
     }
 
-    public function getPermissions()
+    /**
+     * Listar todas as permissões do módulo TFD.
+     */
+    public function getPermissions(): JsonResponse
     {
         $this->authorize('tfd/regra listar');
+
         $permissions = Permission::query()
-            ->where('name','LIKE','tfd%')
+            ->where('name', 'LIKE', 'tfd%')
             ->get();
-        return response()->json($permissions, 200);
+
+        return response()->json($permissions, JsonResponse::HTTP_OK);
     }
 
-    public function createRole(Request $request, RoleService $roleService)
+    /**
+     * Criar uma nova regra.
+     */
+    public function createRole(Request $request): JsonResponse
     {
         $this->authorize('tfd/regra criar');
-        return $roleService->createRole($request);
+
+        return $this->roleService->createRole($request);
     }
 
-    public function updateRole(Role $role, Request $request, RoleService $roleService)
+    /**
+     * Atualizar dados de uma regra.
+     */
+    public function updateRole(Role $role, Request $request): JsonResponse
     {
         $this->authorize('tfd/regra atualizar');
-        return $roleService->updateRole($role, $request);
+
+        return $this->roleService->updateRole($role, $request);
     }
 
-    public function deleteRole(Role $role, RoleService $roleService)
+    /**
+     * Excluir uma regra.
+     */
+    public function deleteRole(Role $role): JsonResponse
     {
         $this->authorize('tfd/regra deletar');
-        return $roleService->deleteRole($role);
+
+        return $this->roleService->deleteRole($role);
     }
 }
