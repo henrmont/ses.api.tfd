@@ -208,32 +208,45 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('travel')
+    ->prefix('travels')
+    ->name('travels.')
     ->controller(TravelController::class)
     ->group(function () {
-        Route::get('get-patient-requests', 'getPatientRequests');
-        Route::get('get-archive-patient-requests', 'getArchivePatientRequests');
-        Route::patch('halted-patient-request/{patient_request}', 'haltedPatientRequest');
-        Route::get('get-patient-escorts/{patient_care}', 'getPatientEscorts');
-        Route::patch('undo-patient-request/{patient_request}', 'undoPatientRequest');
-        Route::patch('archive-patient-request/{patient_request}', 'archivePatientRequest');
-        Route::patch('move-patient-request-from-finished/{patient_request}', 'movePatientRequestFromFinished');
-        Route::patch('move-patient-request-from-archive/{patient_request}', 'movePatientRequestFromArchive');
-        Route::patch('move-patient-request-from-others/{patient_request}', 'movePatientRequestFromOthers');
-        Route::post('import-travels', 'importTravels');
-        Route::get('get-travels/{patient_request}', 'getTravels');
-        Route::post('create-travel/{patient_request}', 'createTravel');
-        Route::patch('update-travel/{travel}', 'updateTravel');
-        Route::delete('delete-travel/{travel}', 'deleteTravel');
-        Route::get('get-passengers/{travel}', 'getPassengers');
-        Route::post('create-passenger/{travel}', 'createPassenger');
-        Route::patch('update-passenger/{passenger}', 'updatePassenger');
-        Route::delete('delete-passenger/{passenger}', 'deletePassenger');
-        Route::get('get-travel-routes/{travel}', 'getTravelRoutes');
-        Route::post('create-travel-route/{travel}', 'createTravelRoute');
-        Route::patch('update-travel-route/{travel_route}', 'updateTravelRoute');
-        Route::delete('delete-travel-route/{travel_route}', 'deleteTravelRoute');
-        Route::patch('finish-back-patient-request/{patient_request}', 'finishBackPatientRequest');
+        // Consultas e listagens principais
+        Route::get('patient-requests', 'getPatientRequests')->name('patient-requests.index');
+        Route::get('patient-requests/archived', 'getArchivePatientRequests')->name('patient-requests.archived');
+        Route::get('patient-cares/{patient_care}/escorts', 'getPatientEscorts')->name('patient-cares.escorts');
+
+        // CRUD de Viagens (Travels)
+        Route::get('patient-requests/{patient_request}', 'getTravels')->name('index');
+        Route::post('patient-requests/{patient_request}', 'createTravel')->name('store');
+        Route::patch('{travel}', 'updateTravel')->name('update');
+        Route::delete('{travel}', 'deleteTravel')->name('destroy');
+        Route::post('import', 'importTravels')->name('import');
+
+        // Passageiros da viagem (Passengers)
+        Route::get('{travel}/passengers', 'getPassengers')->name('passengers.index');
+        Route::post('{travel}/passengers', 'createPassenger')->name('passengers.store');
+        Route::patch('passengers/{passenger}', 'updatePassenger')->name('passengers.update');
+        Route::delete('passengers/{passenger}', 'deletePassenger')->name('passengers.destroy');
+        Route::get('{travel}/passengers/exists', 'passengerExists')->name('passengers.exists');
+
+        // Rotas da viagem (Routes)
+        Route::get('{travel}/routes', 'getTravelRoutes')->name('routes.index');
+        Route::post('{travel}/routes', 'createTravelRoute')->name('routes.store');
+        Route::patch('routes/{travel_route}', 'updateTravelRoute')->name('routes.update');
+        Route::delete('routes/{travel_route}', 'deleteTravelRoute')->name('routes.destroy');
+
+        // Tramitações e processamentos de solicitações
+        Route::patch('patient-requests/{patient_request}/escorts', 'patientRequestEscorts')->name('patient-requests.escorts');
+        Route::patch('patient-requests/{patient_request}/undo', 'undoPatientRequest')->name('patient-requests.undo');
+        Route::patch('patient-requests/{patient_request}/finish-back', 'finishBackPatientRequest')->name('patient-requests.finish-back');
+
+        // Ações de estado, movimentações e arquivamento
+        Route::patch('patient-requests/{patient_request}/archive', 'archivePatientRequest')->name('patient-requests.archive');
+        Route::patch('patient-requests/{patient_request}/halted', 'haltedPatientRequest')->name('patient-requests.halt');
+        Route::patch('patient-requests/{patient_request}/move-from-archive', 'movePatientRequestFromArchive')->name('patient-requests.move-from-archive');
+        Route::patch('patient-requests/{patient_request}/move-from-others', 'movePatientRequestFromOthers')->name('patient-requests.move-from-others');
     });
 
 Route::middleware(['api', Auth::class])

@@ -23,7 +23,7 @@ return new class extends Migration
             $table->string('class')->nullable();
             $table->string('scales')->nullable();
             $table->string('family')->nullable();
-            $table->float('distance', 10, 2)->nullable();
+            $table->decimal('distance', 10, 2)->nullable();
             $table->softDeletes();
             $table->timestamps();
         });

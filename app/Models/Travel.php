@@ -45,22 +45,38 @@ class Travel extends Model
 
     // Accessors & Mutators
     protected $appends = [
+        'status',
         'total_tariffs',
         'total_taxes',
         'total'
     ];
 
+    protected function status(): Attribute
+    {
+        if (
+            is_null($this->type) ||
+            is_null($this->origin) ||
+            is_null($this->destination) ||
+            (is_null($this->departure_date) && is_null($this->return_date)) ||
+            is_null($this->description) ||
+            $this->passengers()->doesntExist() ||
+            $this->travelRoutes()->doesntExist()
+        ) 
+            return Attribute::make(get: fn () => false);
+        return Attribute::make(get: fn () => true);
+    }
+
     protected function totalTariffs(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->passengers()->sum('tariff')
+            get: fn () => $this->passengers()->sum('tariff') || 0
         );
     }
 
     protected function totalTaxes(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->passengers()->sum('tax')
+            get: fn () => $this->passengers()->sum('tax') || 0
         );
     }
 

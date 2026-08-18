@@ -10,91 +10,190 @@ use App\Models\Professional;
 use App\Models\Travel;
 use App\Models\TravelRoute;
 use Exception;
+use Illuminate\Database\Connection;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class TravelService
 {
-    private function tfd()
+    /**
+     * Conexão com o banco padrão (TFD).
+     */
+    private function tfd(): Connection
     {
-        return DB::connection(); 
+        return DB::connection();
     }
 
-    public function haltedPatientRequest(PatientRequest $patient_request)
-    {
-        try {
-            $patient_request->update(['is_travel_bookmark' => !$patient_request->is_travel_bookmark]);
-            return response()->json(['message' => $patient_request->is_travel_bookmark ? 'Solicitação marcada em sobrestado.' : 'Solicitação desmarcada em sobrestado.'], 200);
-        } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | Tramitação e Mudança de Estados da Solicitação
+    |--------------------------------------------------------------------------
+    */
 
-    public function finishPatientRequestTravel(PatientRequest $patient_request)
-    {
-        try {
-            $patient_request->update(['is_travel_finished' => true]);
-            return response()->json(['message' => 'Solicitação de viagem finalizada com sucesso.'], 200);
-        } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
-    }
-
-    public function movePatientRequestFromFinished(PatientRequest $patient_request)
-    {
-        try {
-            $patient_request->update([
-                'is_travel_finished' => false,
-            ]);
-            return response()->json(['message' => 'Solicitação transferida com sucesso.'], 200);
-        } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
-    }
-
-    public function movePatientRequestFromArchive(PatientRequest $patient_request)
-    {
-        try {
-            $patient_request->update([
-                'back_to_travel' => 'Retirou do arquivo',
-            ]);
-            $patient_request->update(['is_travel_archived' => false]);
-            return response()->json(['message' => 'Solicitação retirada do arquivo.'], 200);
-        } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
-    }
-
-    public function movePatientRequestFromOthers(PatientRequest $patient_request)
-    {
-        try {
-            $patient_request->update([
-                'travel_professional_id' => Professional::where('user_id',auth()->user()->id)->first()->id,
-            ]);
-            return response()->json(['message' => 'Solicitação transferida com sucesso.'], 200);
-        } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
-    }
-
-    public function importTravels(Request $request)
+    /**
+     * Alternar marcação de sobrestado/paralisação da viagem.
+     */
+    public function haltedPatientRequest(PatientRequest $patient_request): JsonResponse
     {
         try {
             $this->tfd()->beginTransaction();
+
+            $patient_request->update(['is_travel_bookmark' => !$patient_request->is_travel_bookmark]);
+
+            $this->tfd()->commit();
+
+            $message = $patient_request->is_travel_bookmark
+                ? 'Solicitação marcada em sobrestado.'
+                : 'Solicitação desmarcada em sobrestado.';
+
+            return response()->json(['message' => $message], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao alternar sobrestado da viagem: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Restaurar solicitação arquivada.
+     */
+    public function movePatientRequestFromArchive(PatientRequest $patient_request): JsonResponse
+    {
+        try {
+            $this->tfd()->beginTransaction();
+
+            $patient_request->update([
+                'back_to_travel' => 'Retirou do arquivo',
+                'is_travel_archived' => false,
+            ]);
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Solicitação retirada do arquivo.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao mover solicitação do arquivo: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Transferir solicitação a partir do setor "Outros".
+     */
+    public function movePatientRequestFromOthers(PatientRequest $patient_request): JsonResponse
+    {
+        try {
+            $this->tfd()->beginTransaction();
+
+            $professionalId = Professional::where('user_id', auth()->id())->value('id');
+
+            $patient_request->update([
+                'travel_professional_id' => $professionalId,
+            ]);
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Solicitação transferida com sucesso.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao mover solicitação de outros: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Finalizar devolução/retorno atribuído à viagem.
+     */
+    public function finishBackPatientRequest(PatientRequest $patient_request): JsonResponse
+    {
+        try {
+            $this->tfd()->beginTransaction();
+
+            $patient_request->update(['back_to_travel' => null]);
+
+            $professionalId = Professional::where('user_id', auth()->id())->value('id');
+
+            if ($patient_request->back_from_travel == $professionalId) {
+                $patient_request->update(['back_from_travel' => null]);
+            }
+
+            if ($patient_request->back_from_cost_assistance == $professionalId) {
+                $patient_request->update(['back_from_cost_assistance' => null]);
+            }
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Solicitação atualizada com sucesso.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao finalizar retorno da viagem: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Arquivar etapa de viagem da solicitação.
+     */
+    public function archiveTravelPatientRequest(PatientRequest $patient_request): JsonResponse
+    {
+        try {
+            $this->tfd()->beginTransaction();
+
+            $patient_request->update(['is_travel_archived' => true]);
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Solicitação arquivada com sucesso.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao arquivar viagem da solicitação: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Integração e Importação de Passagens
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Importar passagens/viagens via Webservice externo.
+     */
+    public function importTravels(Request $request): JsonResponse
+    {
+        try {
+            $this->tfd()->beginTransaction();
+
             $response = Http::timeout(300)->get('https://www.westonline.tur.br/tfdWS/TFD/vendas', [
                 'user' => 'tfdws',
                 'pwd' => '%4jK*M@jS',
                 'dtEmissao' => date('d/m/Y', strtotime($request->import_at)),
             ]);
+
             $xmlString = $response->body();
             $xmlObject = simplexml_load_string($xmlString);
-            $json = json_encode($xmlObject);
-            $array = json_decode($json, true);
+            $array = json_decode(json_encode($xmlObject), true);
+
             foreach ($array as $item) {
                 $lastOS = null;
+
                 foreach ($item as $reservation) {
                     $travel = Travel::where('os', $reservation['numeroOs'])->first();
+
                     if ($travel) {
                         if ($lastOS != $reservation['numeroOs']) {
                             $travel->update([
@@ -106,6 +205,7 @@ class TravelService
                                 'description' => $reservation['descricaoOs'],
                                 'company' => $reservation['cia'],
                             ]);
+
                             foreach ($reservation['trechos']['trecho'] as $router) {
                                 $travel->travelRoutes()->create([
                                     'departure' => $router['dataPartida'],
@@ -116,151 +216,275 @@ class TravelService
                                 ]);
                             }
                         }
+
                         $lastOS = $reservation['numeroOs'];
-                        if ($reservation['passageiros']['passageiro']['isAcompanhante'] == 'true') {
+                        $passengerData = $reservation['passageiros']['passageiro'];
+                        $isEscort = $passengerData['isAcompanhante'] === 'true';
+
+                        if ($isEscort) {
+                            $escortId = Escort::where('document', $passengerData['cpf'])->value('id');
+
                             $travel->passengers()->create([
                                 'is_patient' => false,
-                                'escort_id' => Escort::where('document', $reservation['passageiros']['passageiro']['cpf'])->first()->id,
-                                'tariff' => $reservation['passageiros']['passageiro']['tarifa'],
-                                'tax' => $reservation['passageiros']['passageiro']['taxas'],
-                                'type' => $reservation['passageiros']['passageiro']['tipo'],
-                                'gender' => $reservation['passageiros']['passageiro']['sexo'],
-                                'ticket' => $reservation['passageiros']['passageiro']['numeroDoBilhete'],
-                                'discount' => $reservation['passageiros']['passageiro']['du']
+                                'escort_id' => $escortId,
+                                'tariff' => $passengerData['tarifa'],
+                                'tax' => $passengerData['taxas'],
+                                'type' => $passengerData['tipo'],
+                                'gender' => $passengerData['sexo'],
+                                'ticket' => $passengerData['numeroDoBilhete'],
+                                'discount' => $passengerData['du'],
                             ]);
                         } else {
+                            $patientId = Patient::where('document', $passengerData['cpf'])->value('id');
+
                             $travel->passengers()->create([
                                 'is_patient' => true,
-                                'patient_id' => Patient::where('document', $reservation['passageiros']['passageiro']['cpf'])->first()->id,
-                                'tariff' => $reservation['passageiros']['passageiro']['tarifa'],
-                                'tax' => $reservation['passageiros']['passageiro']['taxas'],
-                                'type' => $reservation['passageiros']['passageiro']['tipo'],
-                                'gender' => $reservation['passageiros']['passageiro']['sexo'],
-                                'ticket' => $reservation['passageiros']['passageiro']['numeroDoBilhete'],
-                                'discount' => $reservation['passageiros']['passageiro']['du']
+                                'patient_id' => $patientId,
+                                'tariff' => $passengerData['tarifa'],
+                                'tax' => $passengerData['taxas'],
+                                'type' => $passengerData['tipo'],
+                                'gender' => $passengerData['sexo'],
+                                'ticket' => $passengerData['numeroDoBilhete'],
+                                'discount' => $passengerData['du'],
                             ]);
                         }
                     }
                 }
             }
+
             $this->tfd()->commit();
-            return response()->json(['message' => 'Passagens importadas com sucesso.'], 200);
+
+            return response()->json(['message' => 'Passagens importadas com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
             $this->tfd()->rollBack();
-            return response()->json(['message' => $e->getMessage()], 400);
+
+            Log::error('Erro ao importar passagens: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
     }
 
-    public function createTravel(PatientRequest $patient_request, Request $request)
-    {
-        try {
-            $patient_request->travels()->create($request->all());
-            return response()->json(['message' => 'Viagem criada com sucesso.'], 200);
-        } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | Gestão de Viagens (Travels)
+    |--------------------------------------------------------------------------
+    */
 
-    public function updateTravel(Travel $travel, Request $request)
-    {
-        try {
-            $travel->update($request->all());
-            return response()->json(['message' => 'Viagem atualizada com sucesso.'], 200);
-        } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
-    }
-
-    public function deleteTravel(Travel $travel)
-    {
-        try {
-            $travel->delete();
-            return response()->json(['message' => 'Viagem deletada com sucesso.'], 200);
-        } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
-    }
-
-    public function createPassenger(Travel $travel, Request $request)
+    /**
+     * Criar registro de viagem.
+     */
+    public function createTravel(PatientRequest $patient_request, Request $request): JsonResponse
     {
         try {
             $this->tfd()->beginTransaction();
-            $passenger = $travel->passengers()->create($request->only('is_patient','tariff','tax','type','gender','seat','ticket','discount'));
-            if ($passenger->is_patient)
-                $passenger->update(['patient_id' => $request->passenger_id]);
-            else
-                $passenger->update(['escort_id' => $request->passenger_id]);
+
+            $patient_request->travels()->create($request->all());
+
             $this->tfd()->commit();
-            return response()->json(['message' => 'Passageiro criado com sucesso.'], 200);
+
+            return response()->json(['message' => 'Viagem criada com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
             $this->tfd()->rollBack();
-            return response()->json(['message' => $e->getMessage()], 400);
+
+            Log::error('Erro ao criar viagem: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
     }
 
-    public function updatePassenger(Passenger $passenger, Request $request)
+    /**
+     * Atualizar dados da viagem.
+     */
+    public function updateTravel(Travel $travel, Request $request): JsonResponse
     {
         try {
-            $passenger->update($request->only('tariff','tax','gender','seat','ticket','discount'));
-            return response()->json(['message' => 'Passageiro atualizado com sucesso.'], 200);
+            $this->tfd()->beginTransaction();
+
+            $travel->update($request->all());
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Viagem atualizada com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao atualizar viagem: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
     }
 
-    public function deletePassenger(Passenger $passenger)
+    /**
+     * Excluir registro de viagem.
+     */
+    public function deleteTravel(Travel $travel): JsonResponse
     {
         try {
+            $this->tfd()->beginTransaction();
+
+            $travel->delete();
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Viagem deletada com sucesso.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao deletar viagem: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gestão de Passageiros (Passengers)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Adicionar passageiro à viagem.
+     */
+    public function createPassenger(Travel $travel, Request $request): JsonResponse
+    {
+        try {
+            $this->tfd()->beginTransaction();
+
+            $passengerData = $request->only(['is_patient', 'tariff', 'tax', 'type', 'gender', 'seat', 'ticket', 'discount']);
+
+            if (filter_var($request->is_patient, FILTER_VALIDATE_BOOLEAN)) {
+                $passengerData['patient_id'] = $request->passenger_id;
+            } else {
+                $passengerData['escort_id'] = $request->passenger_id;
+            }
+
+            $travel->passengers()->create($passengerData);
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Passageiro criado com sucesso.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao criar passageiro: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Atualizar dados do passageiro.
+     */
+    public function updatePassenger(Passenger $passenger, Request $request): JsonResponse
+    {
+        try {
+            $this->tfd()->beginTransaction();
+
+            $passenger->update($request->only(['tariff', 'tax', 'gender', 'seat', 'ticket', 'discount']));
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Passageiro atualizado com sucesso.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao atualizar passageiro: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Excluir passageiro da viagem.
+     */
+    public function deletePassenger(Passenger $passenger): JsonResponse
+    {
+        try {
+            $this->tfd()->beginTransaction();
+
             $passenger->delete();
-            return response()->json(['message' => 'Passageiro deletado com sucesso.'], 200);
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Passageiro deletado com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao deletar passageiro: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
     }
 
-    public function createTravelRoute(Travel $travel, Request $request)
+    /*
+    |--------------------------------------------------------------------------
+    | Gestão de Rotas/Trechos de Viagem (TravelRoutes)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Criar rota/trecho para a viagem.
+     */
+    public function createTravelRoute(Travel $travel, Request $request): JsonResponse
     {
         try {
+            $this->tfd()->beginTransaction();
+
             $travel->travelRoutes()->create($request->all());
-            return response()->json(['message' => 'Rota criada com sucesso.'], 200);
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Rota criada com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao criar rota da viagem: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
     }
 
-    public function updateTravelRoute(TravelRoute $travel_route, Request $request)
+    /**
+     * Atualizar rota/trecho da viagem.
+     */
+    public function updateTravelRoute(TravelRoute $travel_route, Request $request): JsonResponse
     {
         try {
+            $this->tfd()->beginTransaction();
+
             $travel_route->update($request->all());
-            return response()->json(['message' => 'Rota atualizada com sucesso.'], 200);
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Rota atualizada com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao atualizar rota da viagem: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
     }
 
-    public function deleteTravelRoute(TravelRoute $travel_route)
+    /**
+     * Excluir rota/trecho da viagem.
+     */
+    public function deleteTravelRoute(TravelRoute $travel_route): JsonResponse
     {
         try {
+            $this->tfd()->beginTransaction();
+
             $travel_route->delete();
-            return response()->json(['message' => 'Rota deletada com sucesso.'], 200);
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Rota deletada com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao deletar rota da viagem: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
     }
-
-    public function finishBackPatientRequest(PatientRequest $patient_request)
-    {
-        try {
-            $patient_request->update(['back_to_travel' => null]);
-            $professionalId = Professional::where('user_id',auth()->user()->id)->first()->id;
-            if ($patient_request->back_from_travel == $professionalId)
-                $patient_request->update(['back_from_travel' => null]);
-            if ($patient_request->back_from_cost_assistance == $professionalId)
-                $patient_request->update(['back_from_cost_assistance' => null]);
-            return response()->json(['message' => 'Solicitação atualizada com sucesso.'], 200);
-        } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
-        }
-    }
-
 }

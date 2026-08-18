@@ -233,7 +233,7 @@ class PatientRequest extends Model
     protected function travelStatus(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->travels()->whereNotNull('departure_date')->exists() && $this->travels()->whereNotNull('return_date')->exists()
+            get: fn () => $this->travels->contains('status', true)
         );
     }
 

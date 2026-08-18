@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Passenger;
-use App\Models\Patient;
 use App\Models\PatientCare;
 use App\Models\PatientRequest;
 use App\Models\Travel;
@@ -11,16 +10,32 @@ use App\Models\TravelRoute;
 use App\Services\PatientRequestService;
 use App\Services\TravelService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class TravelController extends Controller
 {
     use AuthorizesRequests;
-    
-    public function getPatientRequests()
+
+    public function __construct(
+        protected TravelService $travelService,
+        protected PatientRequestService $patientRequestService
+    ) {}
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gestão de Solicitações do TFD (Passagens)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Listar solicitações de passagem pendentes.
+     */
+    public function getPatientRequests(): JsonResponse
     {
         $this->authorize('tfd/passagem listar');
-        $patient_requests = PatientRequest::query()
+
+        $patientRequests = PatientRequest::query()
             ->notPatientBack()
             ->whereNull('back_to_cost_assistance')
             ->where(function ($query) {
@@ -33,17 +48,39 @@ class TravelController extends Controller
                 $query->whereNull('back_to_social')->orWhereNull('back_from_travel');
             })
             ->where('is_travel_archived', false)
-            ->where('type','Agendamento')
-            ->with('report.patientCare.patient','report.patientCare.user.professional','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
-            ->orderBy('id','desc')
+            ->where('type', 'Agendamento')
+            ->with([
+                'report.patientCare.patient',
+                'report.patientCare.user.professional',
+                'report.cid',
+                'report.attachments',
+                'attachments',
+                'hospitalUnity',
+                'medicalProfessional',
+                'ownerProfessional',
+                'socialProfessional',
+                'travelProfessional',
+                'costAssistanceProfessional',
+                'accountabilityProfessional',
+                'travels.passengers.patient',
+                'travels.passengers.escort',
+                'costAssistances.costAssistanceDailies.dailyCost',
+                'accountabilities.accountabilityDailies.dailyCost',
+            ])
+            ->latest('id')
             ->get();
-        return response()->json($patient_requests, 200);
+
+        return response()->json($patientRequests, JsonResponse::HTTP_OK);
     }
 
-    public function getArchivePatientRequests()
+    /**
+     * Listar solicitações arquivadas no setor de passagens.
+     */
+    public function getArchivePatientRequests(): JsonResponse
     {
         $this->authorize('tfd/passagem listar');
-        $patient_requests = PatientRequest::query()
+
+        $patientRequests = PatientRequest::query()
             ->notPatientBack()
             ->where(function ($query) {
                 $query->whereNull('back_to_owner')->orWhereNull('back_from_travel');
@@ -55,164 +92,289 @@ class TravelController extends Controller
                 $query->whereNull('back_to_social')->orWhereNull('back_from_travel');
             })
             ->where('is_travel_archived', true)
-            ->with('report.patientCare.patient','report.patientCare.user.professional','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
-            ->orderBy('id','desc')
+            ->with([
+                'report.patientCare.patient',
+                'report.patientCare.user.professional',
+                'report.cid',
+                'report.attachments',
+                'attachments',
+                'hospitalUnity',
+                'medicalProfessional',
+                'ownerProfessional',
+                'socialProfessional',
+                'travelProfessional',
+                'costAssistanceProfessional',
+                'accountabilityProfessional',
+                'travels.passengers.patient',
+                'travels.passengers.escort',
+                'costAssistances.costAssistanceDailies.dailyCost',
+                'accountabilities.accountabilityDailies.dailyCost',
+            ])
+            ->latest('id')
             ->get();
-        return response()->json($patient_requests, 200);
+
+        return response()->json($patientRequests, JsonResponse::HTTP_OK);
     }
 
-    public function haltedPatientRequest(PatientRequest $patient_request, TravelService $travelService)
-    {
-        $this->authorize('tfd/passagem atualizar');
-        return $travelService->haltedPatientRequest($patient_request);
-    }
-
-    public function getPatientEscorts(PatientCare $patient_care)
+    /**
+     * Listar acompanhantes do paciente vinculado ao atendimento.
+     */
+    public function getPatientEscorts(PatientCare $patient_care): JsonResponse
     {
         $this->authorize('tfd/passagem acompanhantes');
-        $patient_escorts = $patient_care->escorts()
-            ->orderBy('id','asc')
+
+        $patientEscorts = $patient_care->escorts()
+            ->oldest('id')
             ->get();
-        return response()->json($patient_escorts, 200);
+
+        return response()->json($patientEscorts, JsonResponse::HTTP_OK);
     }
 
-    public function undoPatientRequest(PatientRequest $patient_request, Request $request, PatientRequestService $patientRequestService)
+    /*
+    |--------------------------------------------------------------------------
+    | Tramitação e Mudança de Estados da Solicitação
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Sobrestar/paralisar a solicitação de passagem.
+     */
+    public function haltedPatientRequest(PatientRequest $patient_request)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $patientRequestService->undoPatientRequest($patient_request, $request, 'travel');
+
+        return $this->travelService->haltedPatientRequest($patient_request);
     }
 
-    public function finishPatientRequestTravel(PatientRequest $patient_request, TravelService $travelService)
+    /**
+     * Desfazer ação / devolver solicitação no fluxo de passagens.
+     */
+    public function undoPatientRequest(PatientRequest $patient_request, Request $request)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $travelService->finishPatientRequestTravel($patient_request);  
+
+        return $this->patientRequestService->undoPatientRequest($patient_request, $request, 'travel');
     }
 
-    public function movePatientRequestFromFinished(PatientRequest $patient_request, TravelService $travelService)
+    /**
+     * Mover solicitação a partir do arquivo.
+     */
+    public function movePatientRequestFromArchive(PatientRequest $patient_request)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $travelService->movePatientRequestFromFinished($patient_request);
+
+        return $this->travelService->movePatientRequestFromArchive($patient_request);
     }
 
-    public function movePatientRequestFromArchive(PatientRequest $patient_request, TravelService $travelService)
+    /**
+     * Mover solicitação a partir do setor "Outros".
+     */
+    public function movePatientRequestFromOthers(PatientRequest $patient_request)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $travelService->movePatientRequestFromArchive($patient_request);
+
+        return $this->travelService->movePatientRequestFromOthers($patient_request);
     }
 
-    public function movePatientRequestFromOthers(PatientRequest $patient_request, TravelService $travelService)
+    /**
+     * Arquivar a solicitação de passagem.
+     */
+    public function archivePatientRequest(PatientRequest $patient_request)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $travelService->movePatientRequestFromOthers($patient_request);
+
+        return $this->travelService->archiveTravelPatientRequest($patient_request);
     }
 
-    public function importTravels(Request $request, TravelService $travelService)
+    /**
+     * Finalizar devolução da solicitação de passagem.
+     */
+    public function finishBackPatientRequest(PatientRequest $patient_request)
+    {
+        $this->authorize('tfd/passagem atualizar');
+
+        return $this->travelService->finishBackPatientRequest($patient_request);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gestão de Viagens (Travels)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Listar viagens vinculadas a uma solicitação.
+     */
+    public function getTravels(PatientRequest $patient_request): JsonResponse
+    {
+        $this->authorize('tfd/passagem listar');
+
+        $travels = $patient_request->travels()
+            ->with([
+                'patientRequest.report.patientCare.patient',
+                'patientRequest.report.patientCare.escorts',
+            ])
+            ->latest('id')
+            ->get();
+
+        return response()->json($travels, JsonResponse::HTTP_OK);
+    }
+
+    /**
+     * Importar viagens via arquivo/requisição.
+     */
+    public function importTravels(Request $request)
     {
         $this->authorize('tfd/passagem importar');
-        return $travelService->importTravels($request);
+
+        return $this->travelService->importTravels($request);
     }
 
-    public function getTravels(PatientRequest $patient_request)
-    {
-        $this->authorize('tfd/passagem listar');
-        $travels = $patient_request->travels()
-            ->with('patientRequest.report.patientCare.patient','patientRequest.report.patientCare.escorts')
-            ->orderBy('id','desc')
-            ->get();
-        return response()->json($travels, 200);
-    }
-
-    public function createTravel(PatientRequest $patient_request, Request $request, TravelService $travelService)
+    /**
+     * Cadastrar nova viagem.
+     */
+    public function createTravel(PatientRequest $patient_request, Request $request)
     {
         $this->authorize('tfd/passagem criar');
-        return $travelService->createTravel($patient_request, $request);
+
+        return $this->travelService->createTravel($patient_request, $request);
     }
 
-    public function updateTravel(Travel $travel, Request $request, TravelService $travelService)
+    /**
+     * Atualizar dados da viagem.
+     */
+    public function updateTravel(Travel $travel, Request $request)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $travelService->updateTravel($travel, $request);
+
+        return $this->travelService->updateTravel($travel, $request);
     }
 
-    public function deleteTravel(Travel $travel, Request $request, TravelService $travelService)
+    /**
+     * Excluir uma viagem.
+     */
+    public function deleteTravel(Travel $travel, Request $request)
     {
         $this->authorize('tfd/passagem deletar');
-        return $travelService->deleteTravel($travel, $request);
+
+        return $this->travelService->deleteTravel($travel, $request);
     }
 
-    public function getPassengers(Travel $travel)
+    /*
+    |--------------------------------------------------------------------------
+    | Gestão de Passageiros (Passengers)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Listar passageiros vinculados a uma viagem.
+     */
+    public function getPassengers(Travel $travel): JsonResponse
     {
         $this->authorize('tfd/passagem atualizar');
+
         $passengers = $travel->passengers()
-            ->with('patient','escort')
-            ->orderBy('id','asc')
+            ->with('patient', 'escort')
+            ->oldest('id')
             ->get();
-        return response()->json($passengers, 200);
+
+        return response()->json($passengers, JsonResponse::HTTP_OK);
     }
 
-    public function createPassenger(Travel $travel, Request $request, TravelService $travelService)
+    /**
+     * Adicionar passageiro à viagem.
+     */
+    public function createPassenger(Travel $travel, Request $request)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $travelService->createPassenger($travel, $request);
+
+        return $this->travelService->createPassenger($travel, $request);
     }
 
-    public function updatePassenger(Passenger $passenger, Request $request, TravelService $travelService)
+    /**
+     * Atualizar dados do passageiro.
+     */
+    public function updatePassenger(Passenger $passenger, Request $request)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $travelService->updatePassenger($passenger, $request);
+
+        return $this->travelService->updatePassenger($passenger, $request);
     }
 
-    public function deletePassenger(Passenger $passenger, TravelService $travelService)
+    /**
+     * Remover passageiro da viagem.
+     */
+    public function deletePassenger(Passenger $passenger)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $travelService->deletePassenger($passenger);
+
+        return $this->travelService->deletePassenger($passenger);
     }
 
-    public function getTravelRoutes(Travel $travel)
+    /*
+    |--------------------------------------------------------------------------
+    | Gestão de Rotas/Trechos de Viagem (TravelRoutes)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Listar rotas/trechos de uma viagem.
+     */
+    public function getTravelRoutes(Travel $travel): JsonResponse
     {
         $this->authorize('tfd/passagem atualizar');
-        $travel_routes = $travel->travelRoutes()
+
+        $travelRoutes = $travel->travelRoutes()
             ->with('travel')
-            ->orderBy('id','asc')
+            ->oldest('id')
             ->get();
-        return response()->json($travel_routes, 200);
+
+        return response()->json($travelRoutes, JsonResponse::HTTP_OK);
     }
 
-    public function createTravelRoute(Travel $travel, Request $request, TravelService $travelService)
+    /**
+     * Adicionar rota/trecho à viagem.
+     */
+    public function createTravelRoute(Travel $travel, Request $request)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $travelService->createTravelRoute($travel, $request);
+
+        return $this->travelService->createTravelRoute($travel, $request);
     }
 
-    public function updateTravelRoute(TravelRoute $travel_route, Request $request, TravelService $travelService)
+    /**
+     * Atualizar rota/trecho da viagem.
+     */
+    public function updateTravelRoute(TravelRoute $travel_route, Request $request)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $travelService->updateTravelRoute($travel_route, $request);
+
+        return $this->travelService->updateTravelRoute($travel_route, $request);
     }
 
-    public function deleteTravelRoute(TravelRoute $travel_route, TravelService $travelService)
+    /**
+     * Excluir rota/trecho da viagem.
+     */
+    public function deleteTravelRoute(TravelRoute $travel_route)
     {
         $this->authorize('tfd/passagem atualizar');
-        return $travelService->deleteTravelRoute($travel_route);
+
+        return $this->travelService->deleteTravelRoute($travel_route);
     }
 
-    public function archivePatientRequest(PatientRequest $patient_request, PatientRequestService $patientRequestService)
-    {
-        $this->authorize('tfd/passagem atualizar');
-        return $patientRequestService->archiveTravelPatientRequest($patient_request);
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | Validações Auxiliares
+    |--------------------------------------------------------------------------
+    */
 
-    public function finishBackPatientRequest(PatientRequest $patient_request, TravelService $travelService)
-    {
-        $this->authorize('tfd/passagem atualizar');
-        return $travelService->finishBackPatientRequest($patient_request);
-    }
-
-    // validators
-    public function passengerExists(Travel $travel, Request $request)
+    /**
+     * Verificar se o passageiro já está cadastrado na viagem.
+     */
+    public function passengerExists(Travel $travel, Request $request): JsonResponse
     {
         $this->authorize('tfd/passagem listar');
-        // Converter para boolean para evitar erros de falsy (ex: string "true"/"false")
+
         $isPatient = filter_var($request->is_patient, FILTER_VALIDATE_BOOLEAN);
 
         $exists = $travel->passengers()
@@ -224,6 +386,7 @@ class TravelController extends Controller
                 }
             })
             ->exists();
-        return response()->json($exists, 200);
+
+        return response()->json($exists, JsonResponse::HTTP_OK);
     }
 }

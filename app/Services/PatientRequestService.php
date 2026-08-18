@@ -474,22 +474,6 @@ class PatientRequestService
     |--------------------------------------------------------------------------
     */
     /**
-     * Arquivar etapa de viagem da solicitação.
-     */
-    public function archiveTravelPatientRequest(PatientRequest $patient_request): JsonResponse
-    {
-        try {
-            $patient_request->update(['is_travel_archived' => true]);
-
-            return response()->json(['message' => 'Solicitação arquivada com sucesso.'], JsonResponse::HTTP_OK);
-        } catch (Exception $e) {
-            Log::error('Erro ao arquivar viagem da solicitação: ' . $e->getMessage());
-
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
-        }
-    }
-
-    /**
      * Arquivar prestação de contas da solicitação.
      */
     public function archiveAccountabilityPatientRequest(PatientRequest $patient_request): JsonResponse
