@@ -2,168 +2,212 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BudgetAllocation;
 use App\Models\PatientRequest;
 use App\Models\Payment;
 use App\Services\PatientRequestService;
 use App\Services\PaymentService;
-use App\Services\PdfMergerService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 
 class PaymentController extends Controller
 {
     use AuthorizesRequests;
-    
-    public function getPayments()
+
+    public function __construct(
+        protected PaymentService $paymentService,
+        protected PatientRequestService $patientRequestService
+    ) {}
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gestão de Pagamentos do TFD
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Listar pagamentos pendentes e dotação orçamentária.
+     */
+    public function getPayments(): JsonResponse
     {
         $this->authorize('tfd/pagamento listar');
+
         $payments = Payment::query()
             ->whereHas('patientRequest', function ($query) {
                 $query->notPatientBack()
                     ->whereNull('back_to_cost_assistance')
-                    ->where(function ($query) {
-                        $query->whereNull('back_to_owner')->orWhereNull('back_from_cost_assistance');
-                    })
-                    ->where(function ($query) {
-                        $query->whereNull('back_to_medical')->orWhereNull('back_from_cost_assistance');
-                    })
-                    ->where(function ($query) {
-                        $query->whereNull('back_to_social')->orWhereNull('back_from_cost_assistance');
-                    });
+                    ->whereNull('back_to_owner')
+                    ->whereNull('back_to_medical')
+                    ->whereNull('back_to_social')
+                    ->whereNull('back_to_travel');
             })
             ->where('is_payment_archived', false)
-            ->with('costAssistance.costAssistanceDailies.dailyCost','travel','paymentProfessional','paymentAttachments','patientRequest.report.patientCare.patient','patientRequest.report.cid','patientRequest.report.attachments','patientRequest.attachments','patientRequest.hospitalUnity','patientRequest.medicalProfessional','patientRequest.ownerProfessional','patientRequest.socialProfessional','patientRequest.travelProfessional','patientRequest.costAssistanceProfessional','patientRequest.accountabilityProfessional','patientRequest.travels.passengers.patient','patientRequest.travels.passengers.escort','patientRequest.costAssistances.costAssistanceDailies.dailyCost', 'patientRequest.accountabilities.accountabilityDailies.dailyCost')
-            ->orderBy('id','desc')
+            ->with($this->getPaymentRelations())
+            ->latest('id')
             ->get();
-        return response()->json($payments, 200);
+
+        $budgetAllocation = BudgetAllocation::first();
+
+        return response()->json([
+            'payments'          => $payments,
+            'budget_allocation' => $budgetAllocation,
+        ], JsonResponse::HTTP_OK);
     }
 
-    public function getArchivePatientRequests()
+    /**
+     * Listar pagamentos arquivados no setor de pagamentos.
+     */
+    public function getArchivePayments(): JsonResponse
     {
         $this->authorize('tfd/pagamento listar');
-        $patient_requests = PatientRequest::query()
-            ->notPatientBack()
-            ->whereNull('back_to_cost_assistance')
-            ->where(function ($query) {
-                $query->whereNull('back_to_owner')->orWhereNull('back_from_cost_assistance');
-            })
-            ->where(function ($query) {
-                $query->whereNull('back_to_medical')->orWhereNull('back_from_cost_assistance');
-            })
-            ->where(function ($query) {
-                $query->whereNull('back_to_social')->orWhereNull('back_from_cost_assistance');
+
+        $payments = Payment::query()
+            ->whereHas('patientRequest', function ($query) {
+                $query->notPatientBack()
+                    ->whereNull('back_to_cost_assistance')
+                    ->whereNull('back_to_owner')
+                    ->whereNull('back_to_medical')
+                    ->whereNull('back_to_social')
+                    ->whereNull('back_to_travel');
             })
             ->where('is_payment_archived', true)
-            ->where('type','Agendamento')
-            ->with('report.patientCare.patient','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','paymentProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost', 'paymentInfo','paymentAttachments')
-            ->orderBy('id','desc')
+            ->with($this->getPaymentRelations())
+            ->latest('id')
             ->get();
-        return response()->json($patient_requests, 200);
+
+        $budgetAllocation = BudgetAllocation::first();
+
+        return response()->json([
+            'payments'          => $payments,
+            'budget_allocation' => $budgetAllocation,
+        ], JsonResponse::HTTP_OK);
     }
 
-    public function haltedPatientRequest(PatientRequest $patient_request, PaymentService $paymentService)
+    /*
+    |--------------------------------------------------------------------------
+    | Tramitação e Mudança de Estados do Pagamento
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Sobrestar/paralisar a solicitação de pagamento.
+     */
+    public function haltedPayment(Payment $payment)
     {
         $this->authorize('tfd/pagamento atualizar');
-        return $paymentService->haltedPatientRequest($patient_request);
+
+        return $this->paymentService->haltedPayment($payment);
     }
 
-    public function updatePayment(Payment $payment, Request $request, PaymentService $paymentService)
+    /**
+     * Atualizar os dados do pagamento.
+     */
+    public function updatePayment(Payment $payment, Request $request)
     {
         $this->authorize('tfd/pagamento atualizar');
-        return $paymentService->updatePayment($payment, $request);
+
+        return $this->paymentService->updatePayment($payment, $request);
     }
 
-    public function finishPatientRequestPayment(PatientRequest $patient_request, PaymentService $paymentService)
+    /**
+     * Desfazer ação / devolver solicitação no fluxo de pagamentos.
+     */
+    public function undoPatientRequest(PatientRequest $patient_request, Request $request)
     {
         $this->authorize('tfd/pagamento atualizar');
-        return $paymentService->finishPatientRequestPayment($patient_request);  
+
+        return $this->patientRequestService->undoPatientRequest($patient_request, $request);
     }
 
-    public function undoPatientRequest(PatientRequest $patient_request, Request $request, PatientRequestService $patientRequestService)
+    /**
+     * Arquivar a solicitação de pagamento.
+     */
+    public function archivePayment(Payment $payment)
     {
         $this->authorize('tfd/pagamento atualizar');
-        return $patientRequestService->undoPatientRequest($patient_request, $request);
+
+        return $this->paymentService->archivePayment($payment);
     }
 
-    public function archivePatientRequest(PatientRequest $patient_request, PatientRequestService $patientRequestService)
+    /**
+     * Mover solicitação a partir do arquivo.
+     */
+    public function movePaymentFromArchive(Payment $payment)
     {
         $this->authorize('tfd/pagamento atualizar');
-        return $patientRequestService->archivePaymentPatientRequest($patient_request);
+
+        return $this->paymentService->movePaymentFromArchive($payment);
     }
 
-    public function movePatientRequestFromArchive(PatientRequest $patient_request, PaymentService $paymentService)
+    /**
+     * Mover solicitação a partir do setor "Outros".
+     */
+    public function movePaymentFromOthers(Payment $payment)
     {
         $this->authorize('tfd/pagamento atualizar');
-        return $paymentService->movePatientRequestFromArchive($patient_request);
+
+        return $this->paymentService->movePaymentFromOthers($payment);
     }
 
-    public function downloadMergedPdf(Payment $payment, PdfMergerService $pdfMerger): Response
+    /*
+    |--------------------------------------------------------------------------
+    | Emissão de Documentos e PDFs
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Baixar PDF mesclado completo da solicitação.
+     */
+    public function downloadMergedPdf(Payment $payment)
     {
-        $payment->load([
-            'paymentAttachments',
-            'patientRequest.report.patientCare.patient',
-            'patientRequest.report.cid',
-            'patientRequest.travels.passengers.patient',
-            'patientRequest.travels.passengers.escort',
-            'patientRequest.hospitalUnity',
-            'patientRequest.medicalProfessional',
-            'patientRequest.travelProfessional',
-            'costAssistance.passenger.patient',
-            'costAssistance.passenger.escort',
-            'travel.passengers.patient.fileDocument',
-            'travel.passengers.escort.fileDocument',
-            'travel.travelRoutes'
-        ]);
+        $this->authorize('tfd/pagamento listar');
 
-        // Mapeia os anexos passando o campo 'file_base64'
-        $attachments = $payment->paymentAttachments->map(fn($item) => [
-            'id'      => $item->patientRequestAttachment->id,
-            'content' => $item->patientRequestAttachment->archive->archive
-        ])->toArray();
-
-        // Processa a mesclagem em memória
-        $pdfBinary = $pdfMerger->generateMergedPdf($payment->toArray(), $attachments);
-
-        $filename = "processo_{$payment->id}_completo.pdf";
-
-        return response($pdfBinary, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
-            'Access-Control-Expose-Headers' => 'Content-Disposition'
-        ]);
+        return $this->paymentService->downloadMergedPdf($payment);
     }
 
-    public function downloadMemoPdf(Payment $payment, PdfMergerService $pdfMerger): Response
+    /**
+     * Baixar PDF do Memorando de pagamento.
+     */
+    public function downloadMemoPdf(Payment $payment)
     {
-        $payment->load([
-            'paymentAttachments',
-            'patientRequest.report.patientCare.patient',
-            'patientRequest.report.cid',
-            'patientRequest.travels.passengers.patient',
-            'patientRequest.travels.passengers.escort',
-            'patientRequest.hospitalUnity',
-            'patientRequest.medicalProfessional',
-            'patientRequest.travelProfessional',
-            'costAssistance.passenger.patient',
-            'costAssistance.passenger.escort',
+        $this->authorize('tfd/pagamento listar');
+
+        return $this->paymentService->downloadMemoPdf($payment);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Métodos Auxiliares
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Retorna a lista padrão de relacionamentos com eager-loading.
+     */
+    private function getPaymentRelations(): array
+    {
+        return [
             'costAssistance.costAssistanceDailies.dailyCost',
-            'travel.passengers.patient.fileDocument',
-            'travel.passengers.escort.fileDocument',
-            'travel.travelRoutes'
-        ]);
-
-        // Processa a mesclagem em memória
-        $pdfBinary = $pdfMerger->generateMemoPdf($payment->toArray());
-
-        $filename = "memorando_{$payment->document_number}.pdf";
-
-        return response($pdfBinary, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
-            'Access-Control-Expose-Headers' => 'Content-Disposition'
-        ]);
+            'travel.passengers.escort',
+            'paymentProfessional',
+            'paymentAttachments',
+            'patientRequest.report.patientCare.patient',
+            'patientRequest.report.patientCare.user.professional',
+            'patientRequest.report.cid',
+            'patientRequest.report.attachments',
+            'patientRequest.attachments',
+            'patientRequest.hospitalUnity',
+            'patientRequest.medicalProfessional',
+            'patientRequest.ownerProfessional',
+            'patientRequest.socialProfessional',
+            'patientRequest.travelProfessional',
+            'patientRequest.costAssistanceProfessional',
+            'patientRequest.accountabilityProfessional',
+            'patientRequest.travels.passengers.patient',
+            'patientRequest.travels.passengers.escort',
+            'patientRequest.costAssistances.costAssistanceDailies.dailyCost',
+            'patientRequest.accountabilities.accountabilityDailies.dailyCost',
+        ];
     }
-
-    
 }

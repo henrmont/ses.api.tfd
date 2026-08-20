@@ -51,9 +51,20 @@ class Payment extends Model
 
     // Accessors & Mutators
     protected $appends = [
+        'status',
         'payment',
-        'payment_status',
     ];
+
+    protected function status(): Attribute
+    {
+        if (
+            is_null($this->sigadoc) ||
+            is_null($this->creditor) ||
+            is_null($this->document_number)
+        ) 
+            return Attribute::make(get: fn () => false);
+        return Attribute::make(get: fn () => true);
+    }
 
     protected function payment(): Attribute
     {
@@ -61,11 +72,5 @@ class Payment extends Model
             get: fn () => $this->payment_professional_id == Professional::where('user_id', auth()->user()->id)->first()->id ? true : false
         );
     }
-
-    protected function paymentStatus(): Attribute
-    {
-        return Attribute::make(
-            get: fn () => true
-        );
-    }
+    
 }

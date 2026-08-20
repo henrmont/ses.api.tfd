@@ -321,19 +321,27 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('payment')
+    ->prefix('payments')
+    ->name('payments.')
     ->controller(PaymentController::class)
     ->group(function () {
-        Route::get('get-payments', 'getPayments');
-        Route::get('get-archive-patient-requests', 'getArchivePatientRequests');
-        Route::patch('halted-patient-request/{patient_request}', 'haltedPatientRequest');
-        Route::patch('update-payment/{payment}', 'updatePayment');
-        Route::patch('finish-patient-request-payment/{patient_request}', 'finishPatientRequestPayment');
-        Route::patch('undo-patient-request/{patient_request}', 'undoPatientRequest');
-        Route::patch('archive-patient-request/{patient_request}', 'archivePatientRequest');
-        Route::patch('move-patient-request-from-archive/{patient_request}', 'movePatientRequestFromArchive');
-        Route::get('download-merged-pdf/{payment}', 'downloadMergedPdf');
-        Route::get('download-memo-pdf/{payment}', 'downloadMemoPdf');
+        // Consultas e listagens de pagamentos
+        Route::get('/', 'getPayments')->name('index');
+        Route::get('archived', 'getArchivePayments')->name('archived');
+
+        // Edição e atualização de pagamentos
+        Route::patch('{payment}', 'updatePayment')->name('update');
+
+        // Ações de estado, movimentações e arquivamento
+        Route::patch('{payment}/halted', 'haltedPayment')->name('halt');
+        Route::patch('{payment}/archive', 'archivePayment')->name('archive');
+        Route::patch('{payment}/move-from-archive', 'movePaymentFromArchive')->name('move-from-archive');
+        Route::patch('{payment}/move-from-others', 'movePaymentFromOthers')->name('move-from-others');
+        Route::patch('patient-requests/{patient_request}/undo', 'undoPatientRequest')->name('patient-requests.undo');
+
+        // Emissão de documentos e PDFs
+        Route::get('{payment}/download-merged-pdf', 'downloadMergedPdf')->name('download-merged-pdf');
+        Route::get('{payment}/download-memo-pdf', 'downloadMemoPdf')->name('download-memo-pdf');
     });
 
 // CHECKS
