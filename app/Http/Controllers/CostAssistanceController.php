@@ -13,16 +13,33 @@ use App\Services\CostAssistanceService;
 use App\Services\PatientRequestService;
 use App\Services\PatientService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CostAssistanceController extends Controller
 {
     use AuthorizesRequests;
-    
-    public function getPatientRequests()
+
+    public function __construct(
+        protected CostAssistanceService $costAssistanceService,
+        protected PatientService $patientService,
+        protected PatientRequestService $patientRequestService
+    ) {}
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gestão de Solicitações do TFD (Ajudas de Custo)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Listar solicitações de ajuda de custo pendentes.
+     */
+    public function getPatientRequests(): JsonResponse
     {
         $this->authorize('tfd/ajuda de custo listar');
-        $patient_requests = PatientRequest::query()
+
+        $patientRequests = PatientRequest::query()
             ->notPatientBack()
             ->whereNull('back_to_travel')
             ->where(function ($query) {
@@ -35,147 +52,346 @@ class CostAssistanceController extends Controller
                 $query->whereNull('back_to_social')->orWhereNull('back_from_cost_assistance');
             })
             ->where('is_cost_assistance_archived', false)
-            ->where('type','Agendamento')
-            ->with('report.patientCare.patient','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost')
-            ->orderBy('id','desc')
+            ->where('type', 'Agendamento')
+            ->with([
+                'report.patientCare.patient',
+                'report.cid',
+                'report.attachments',
+                'attachments',
+                'hospitalUnity',
+                'medicalProfessional',
+                'ownerProfessional',
+                'socialProfessional',
+                'travelProfessional',
+                'costAssistanceProfessional',
+                'accountabilityProfessional',
+                'travels.passengers.patient',
+                'travels.passengers.escort',
+                'costAssistances.costAssistanceDailies.dailyCost',
+                'accountabilities.accountabilityDailies.dailyCost',
+            ])
+            ->latest('id')
             ->get();
-        return response()->json($patient_requests, 200);
+
+        return response()->json($patientRequests, JsonResponse::HTTP_OK);
     }
 
-    public function haltedPatientRequest(PatientRequest $patient_request, CostAssistanceService $costAssistanceService)
-    {
-        $this->authorize('tfd/ajuda de custo atualizar');
-        return $costAssistanceService->haltedPatientRequest($patient_request);
-    }
-
-    public function getCostAssistances(PatientRequest $patient_request)
+    /**
+     * Listar solicitações arquivadas no setor de ajudas de custo.
+     */
+    public function getArchivePatientRequests(): JsonResponse
     {
         $this->authorize('tfd/ajuda de custo listar');
-        $cost_assistances = $patient_request->costAssistances()
-            ->with('costAssistanceDailies.dailyCost','patientRequest.travels.passengers.escort','patientRequest.travels.passengers.patient','passenger.patient','passenger.escort')
-            ->orderBy('id','asc')
+
+        $patientRequests = PatientRequest::query()
+            ->notPatientBack()
+            ->whereNull('back_to_travel')
+            ->where(function ($query) {
+                $query->whereNull('back_to_owner')->orWhereNull('back_from_cost_assistance');
+            })
+            ->where(function ($query) {
+                $query->whereNull('back_to_medical')->orWhereNull('back_from_cost_assistance');
+            })
+            ->where(function ($query) {
+                $query->whereNull('back_to_social')->orWhereNull('back_from_cost_assistance');
+            })
+            ->where('is_cost_assistance_archived', true)
+            ->where('type', 'Agendamento')
+            ->with([
+                'report.patientCare.patient',
+                'report.cid',
+                'report.attachments',
+                'attachments',
+                'hospitalUnity',
+                'medicalProfessional',
+                'ownerProfessional',
+                'socialProfessional',
+                'travelProfessional',
+                'costAssistanceProfessional',
+                'accountabilityProfessional',
+                'travels.passengers.patient',
+                'travels.passengers.escort',
+                'costAssistances.costAssistanceDailies.dailyCost',
+                'accountabilities.accountabilityDailies.dailyCost',
+            ])
+            ->latest('id')
             ->get();
-        return response()->json($cost_assistances, 200);
+
+        return response()->json($patientRequests, JsonResponse::HTTP_OK);
     }
 
-    public function getBalance(PatientCare $patient_care, PatientService $patientService)
+    /**
+     * Listar histórico de solicitações do mesmo relatório.
+     */
+    public function getHistoryPatientRequests(Report $report, PatientRequest $patient_request): JsonResponse
     {
         $this->authorize('tfd/ajuda de custo listar');
-        return $patientService->calcBalance($patient_care);
-    }
 
-    public function createCostAssistance(PatientRequest $patient_request, Request $request, CostAssistanceService $costAssistanceService)
-    {
-        $this->authorize('tfd/ajuda de custo criar');
-        return $costAssistanceService->createCostAssistance($patient_request, $request);
-    }
-
-    public function updateCostAssistance(CostAssistance $cost_assistance, Request $request, CostAssistanceService $costAssistanceService)
-    {
-        $this->authorize('tfd/ajuda de custo atualizar');
-        return $costAssistanceService->updateCostAssistance($cost_assistance, $request);
-    }
-
-    public function deleteCostAssistance(CostAssistance $cost_assistance, CostAssistanceService $costAssistanceService)
-    {
-        $this->authorize('tfd/ajuda de custo deletar');
-        return $costAssistanceService->deleteCostAssistance($cost_assistance);
-    }
-
-    public function getCostAssistanceDailies(CostAssistance $cost_assistance)
-    {
-        $this->authorize('tfd/ajuda de custo listar');
-        $cost_assistance_dailies = $cost_assistance->costAssistanceDailies()
-            ->with('dailyCost')
-            ->orderBy('id','asc')
-            ->get();
-        return response()->json($cost_assistance_dailies, 200);
-    }
-
-    public function getDailyCosts()
-    {
-        $this->authorize('tfd/ajuda de custo listar');
-        $daily_costs = DailyCost::query()
-            ->orderBy('id', 'asc')
-            ->get();
-        return response()->json($daily_costs, 200);
-    }
-
-    public function createCostAssistanceDaily(CostAssistance $cost_assistance, Request $request, CostAssistanceService $costAssistanceService)
-    {
-        $this->authorize('tfd/ajuda de custo criar');
-        return $costAssistanceService->createCostAssistanceDaily($cost_assistance, $request);
-    }
-
-    public function updateCostAssistanceDaily(CostAssistanceDaily $cost_assistance_daily, Request $request, CostAssistanceService $costAssistanceService)
-    {
-        $this->authorize('tfd/ajuda de custo atualizar');
-        return $costAssistanceService->updateCostAssistanceDaily($cost_assistance_daily, $request);
-    }
-
-    public function deleteCostAssistanceDaily(CostAssistanceDaily $cost_assistance_daily, CostAssistanceService $costAssistanceService)
-    {
-        $this->authorize('tfd/ajuda de custo deletar');
-        return $costAssistanceService->deleteCostAssistanceDaily($cost_assistance_daily);
-    }
-
-    public function getHistoryPatientRequests(Report $report, PatientRequest $patient_request)
-    {
-        $this->authorize('tfd/ajuda de custo listar');
-        $patient_requests = $report->patientRequests()
+        $patientRequests = $report->patientRequests()
             ->whereNot('id', $patient_request->id)
-            ->where('type','Agendamento')
-            ->with('report.patientCare.patient','report.cid','report.attachments','attachments','hospitalUnity','medicalProfessional','ownerProfessional','socialProfessional','travelProfessional','costAssistanceProfessional','accountabilityProfessional','paymentProfessional','travels.passengers.patient','travels.passengers.escort','costAssistances.costAssistanceDailies.dailyCost', 'accountabilities.accountabilityDailies.dailyCost', 'paymentInfo','paymentAttachments')
-            ->orderBy('id','desc')
+            ->where('type', 'Agendamento')
+            ->with([
+                'report.patientCare.patient',
+                'report.cid',
+                'report.attachments',
+                'attachments',
+                'hospitalUnity',
+                'medicalProfessional',
+                'ownerProfessional',
+                'socialProfessional',
+                'travelProfessional',
+                'costAssistanceProfessional',
+                'accountabilityProfessional',
+                'travels.passengers.patient',
+                'travels.passengers.escort',
+                'costAssistances.costAssistanceDailies.dailyCost',
+                'accountabilities.accountabilityDailies.dailyCost',
+                // 'paymentInfo',
+                // 'paymentAttachments',
+            ])
+            ->latest('id')
             ->get();
-        return response()->json($patient_requests, 200);
+
+        return response()->json($patientRequests, JsonResponse::HTTP_OK);
     }
 
-    public function movePatientRequestFromHistory(PatientRequest $patient_request, CostAssistanceService $costAssistanceService)
-    {
-        $this->authorize('tfd/ajuda de custo atualizar');
-        return $costAssistanceService->movePatientRequestFromHistory($patient_request);
-    }
-
-    public function movePatientRequestFromProcesses(PatientRequest $patient_request, CostAssistanceService $costAssistanceService)
-    {
-        $this->authorize('tfd/ajuda de custo atualizar');
-        return $costAssistanceService->movePatientRequestFromProcesses($patient_request);
-    }
-
-    public function movePatientRequestFromOthers(PatientRequest $patient_request, CostAssistanceService $costAssistanceService)
-    {
-        $this->authorize('tfd/ajuda de custo atualizar');
-        return $costAssistanceService->movePatientRequestFromOthers($patient_request);
-    }
-
-    public function undoPatientRequest(PatientRequest $patient_request, Request $request, PatientRequestService $patientRequestService)
-    {
-        $this->authorize('tfd/ajuda de custo atualizar');
-        return $patientRequestService->undoPatientRequest($patient_request, $request, 'cost assistance');
-    }
-
-    public function getPaymentProfessionals()
+    /**
+     * Obter saldo calculado do atendimento do paciente.
+     */
+    public function getBalance(PatientCare $patient_care)
     {
         $this->authorize('tfd/ajuda de custo listar');
-        $payment_profissionals = Professional::query()
+
+        return $this->patientService->calcBalance($patient_care);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tramitação e Mudança de Estados da Solicitação
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Sobrestar/paralisar a solicitação de ajuda de custo.
+     */
+    public function haltedPatientRequest(PatientRequest $patient_request)
+    {
+        $this->authorize('tfd/ajuda de custo atualizar');
+
+        return $this->costAssistanceService->haltedPatientRequest($patient_request);
+    }
+
+    /**
+     * Desfazer ação / devolver solicitação no fluxo de ajudas de custo.
+     */
+    public function undoPatientRequest(PatientRequest $patient_request, Request $request)
+    {
+        $this->authorize('tfd/ajuda de custo atualizar');
+
+        return $this->patientRequestService->undoPatientRequest($patient_request, $request, 'cost assistance');
+    }
+
+    /**
+     * Mover solicitação a partir do histórico.
+     */
+    public function movePatientRequestFromHistory(PatientRequest $patient_request)
+    {
+        $this->authorize('tfd/ajuda de custo atualizar');
+
+        return $this->costAssistanceService->movePatientRequestFromHistory($patient_request);
+    }
+
+    /**
+     * Mover solicitação a partir do setor "Outros".
+     */
+    public function movePatientRequestFromOthers(PatientRequest $patient_request)
+    {
+        $this->authorize('tfd/ajuda de custo atualizar');
+
+        return $this->costAssistanceService->movePatientRequestFromOthers($patient_request);
+    }
+
+    /**
+     * Mover solicitação a partir do arquivo.
+     */
+    public function movePatientRequestFromArchive(PatientRequest $patient_request)
+    {
+        $this->authorize('tfd/ajuda de custo atualizar');
+
+        return $this->costAssistanceService->movePatientRequestFromArchive($patient_request);
+    }
+
+    /**
+     * Arquivar a solicitação de ajuda de custo.
+     */
+    public function archivePatientRequest(PatientRequest $patient_request)
+    {
+        $this->authorize('tfd/ajuda de custo atualizar');
+
+        return $this->costAssistanceService->archivePatientRequest($patient_request);
+    }
+
+    /**
+     * Finalizar devolução da solicitação de ajuda de custo.
+     */
+    public function finishBackPatientRequest(PatientRequest $patient_request)
+    {
+        $this->authorize('tfd/ajuda de custo atualizar');
+
+        return $this->costAssistanceService->finishBackPatientRequest($patient_request);
+    }
+
+    /**
+     * Tramitar solicitação para o setor de pagamento.
+     */
+    public function processPatientRequestToPayment(PatientRequest $patient_request, Request $request)
+    {
+        $this->authorize('tfd/ajuda de custo atualizar');
+
+        return $this->costAssistanceService->processPatientRequestToPayment($patient_request, $request);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gestão de Ajudas de Custo (CostAssistances)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Listar ajudas de custo vinculadas a uma solicitação.
+     */
+    public function getCostAssistances(PatientRequest $patient_request): JsonResponse
+    {
+        $this->authorize('tfd/ajuda de custo listar');
+
+        $costAssistances = $patient_request->costAssistances()
+            ->with([
+                'costAssistanceDailies.dailyCost',
+                'patientRequest.travels.passengers.escort',
+                'patientRequest.travels.passengers.patient',
+                'passenger.patient',
+                'passenger.escort',
+            ])
+            ->oldest('id')
+            ->get();
+
+        return response()->json($costAssistances, JsonResponse::HTTP_OK);
+    }
+
+    /**
+     * Criar ajuda de custo.
+     */
+    public function createCostAssistance(PatientRequest $patient_request, Request $request)
+    {
+        $this->authorize('tfd/ajuda de custo criar');
+
+        return $this->costAssistanceService->createCostAssistance($patient_request, $request);
+    }
+
+    /**
+     * Atualizar ajuda de custo.
+     */
+    public function updateCostAssistance(CostAssistance $cost_assistance, Request $request)
+    {
+        $this->authorize('tfd/ajuda de custo atualizar');
+
+        return $this->costAssistanceService->updateCostAssistance($cost_assistance, $request);
+    }
+
+    /**
+     * Excluir ajuda de custo.
+     */
+    public function deleteCostAssistance(CostAssistance $cost_assistance)
+    {
+        $this->authorize('tfd/ajuda de custo deletar');
+
+        return $this->costAssistanceService->deleteCostAssistance($cost_assistance);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gestão de Diárias das Ajudas de Custo (CostAssistanceDailies)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Listar diárias vinculadas a uma ajuda de custo.
+     */
+    public function getCostAssistanceDailies(CostAssistance $cost_assistance): JsonResponse
+    {
+        $this->authorize('tfd/ajuda de custo listar');
+
+        $costAssistanceDailies = $cost_assistance->costAssistanceDailies()
+            ->with('dailyCost')
+            ->oldest('id')
+            ->get();
+
+        return response()->json($costAssistanceDailies, JsonResponse::HTTP_OK);
+    }
+
+    /**
+     * Cadastrar diária na ajuda de custo.
+     */
+    public function createCostAssistanceDaily(CostAssistance $cost_assistance, Request $request)
+    {
+        $this->authorize('tfd/ajuda de custo criar');
+
+        return $this->costAssistanceService->createCostAssistanceDaily($cost_assistance, $request);
+    }
+
+    /**
+     * Atualizar diária da ajuda de custo.
+     */
+    public function updateCostAssistanceDaily(CostAssistanceDaily $cost_assistance_daily, Request $request)
+    {
+        $this->authorize('tfd/ajuda de custo atualizar');
+
+        return $this->costAssistanceService->updateCostAssistanceDaily($cost_assistance_daily, $request);
+    }
+
+    /**
+     * Excluir diária da ajuda de custo.
+     */
+    public function deleteCostAssistanceDaily(CostAssistanceDaily $cost_assistance_daily)
+    {
+        $this->authorize('tfd/ajuda de custo deletar');
+
+        return $this->costAssistanceService->deleteCostAssistanceDaily($cost_assistance_daily);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Consultas Auxiliares e Profissionais
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Listar valores/tipos de diárias cadastrados.
+     */
+    public function getDailyCosts(): JsonResponse
+    {
+        $this->authorize('tfd/ajuda de custo listar');
+
+        $dailyCosts = DailyCost::query()
+            ->oldest('id')
+            ->get();
+
+        return response()->json($dailyCosts, JsonResponse::HTTP_OK);
+    }
+
+    /**
+     * Listar profissionais do setor de pagamento.
+     */
+    public function getPaymentProfessionals(): JsonResponse
+    {
+        $this->authorize('tfd/ajuda de custo listar');
+
+        $paymentProfessionals = Professional::query()
             ->with('user')
             ->withCount('patientPaymentRequests')
-            ->where('type','Pagamento')
+            ->where('type', 'Pagamento')
             ->get();
-        return response()->json($payment_profissionals, 200);
-    }
 
-    public function processPatientRequestToPayment(PatientRequest $patient_request, Request $request, CostAssistanceService $costAssistanceService)
-    {
-        $this->authorize('tfd/ajuda de custo atualizar');
-        return $costAssistanceService->processPatientRequestToPayment($patient_request, $request);
+        return response()->json($paymentProfessionals, JsonResponse::HTTP_OK);
     }
-
-    public function finishBackPatientRequest(PatientRequest $patient_request, CostAssistanceService $costAssistanceService)
-    {
-        $this->authorize('tfd/ajuda de custo atualizar');
-        return $costAssistanceService->finishBackPatientRequest($patient_request);
-    }
-
 }

@@ -33,11 +33,26 @@ class CostAssistance extends Model
     }
 
     protected $appends = [
+        'status',
         'total_amount',
-        'total_dailies'
+        'total_dailies',
     ];
 
     // Accessors & Mutators
+    protected function status(): Attribute
+    {
+        if (
+            is_null($this->passenger_id) ||
+            is_null($this->bank) ||
+            is_null($this->agency) ||
+            is_null($this->account) ||
+            $this->costAssistanceDailies()->doesntExist() 
+        ) 
+            return Attribute::make(get: fn () => false);
+        return Attribute::make(get: fn () => true);
+    }
+
+
     protected function totalAmount(): Attribute
     {
         return Attribute::make(

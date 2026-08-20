@@ -26,10 +26,26 @@ class Accountability extends Model
     }
 
     protected $appends = [
+        'status',
+        'total_amount',
         'total_dailies',
     ];
 
     // Accessors & Mutators
+    protected function status(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->accountabilityDailies()->exists()
+        );
+    }
+
+    protected function totalAmount(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->accountabilityDailies()->sum('amount')
+        );
+    }
+
     protected function totalDailies(): Attribute
     {
         $total = $this->accountabilityDailies()->with('dailyCost')->get()->reduce(function ($carry, $item) {

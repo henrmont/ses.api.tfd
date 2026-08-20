@@ -254,7 +254,7 @@ class PatientRequest extends Model
     protected function costAssistanceStatus(): Attribute
     {
         return Attribute::make(
-            get: fn () => true
+            get: fn () => $this->costAssistances()->exists() && ($this->costAssistances->contains('status', false) ? false : true)
         );
     }
 
@@ -296,7 +296,7 @@ class PatientRequest extends Model
     protected function accountabilityStatus(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->accountabilities()->whereHas('accountabilityDailies')->exists()
+            get: fn () => $this->accountabilities()->exists() && ($this->accountabilities->contains('status', false) ? false : true)
         );
     }
 

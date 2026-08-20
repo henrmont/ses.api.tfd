@@ -250,49 +250,74 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('cost-assistance')
+    ->prefix('cost-assistances')
+    ->name('cost-assistances.')
     ->controller(CostAssistanceController::class)
     ->group(function () {
-        Route::get('get-patient-requests', 'getPatientRequests');
-        Route::patch('halted-patient-request/{patient_request}', 'haltedPatientRequest');
-        Route::get('get-cost-assistances/{patient_request}', 'getCostAssistances');
-        Route::get('get-balance/{patient_care}', 'getBalance');
-        Route::post('create-cost-assistance/{patient_request}', 'createCostAssistance');
-        Route::patch('update-cost-assistance/{cost_assistance}', 'updateCostAssistance');
-        Route::delete('delete-cost-assistance/{cost_assistance}', 'deleteCostAssistance');
-        Route::get('get-cost-assistance-dailies/{cost_assistance}', 'getCostAssistanceDailies');
-        Route::get('get-daily-costs', 'getDailyCosts');
-        Route::post('create-cost-assistance-daily/{cost_assistance}', 'createCostAssistanceDaily');
-        Route::patch('update-cost-assistance-daily/{cost_assistance_daily}', 'updateCostAssistanceDaily');
-        Route::delete('delete-cost-assistance-daily/{cost_assistance_daily}', 'deleteCostAssistanceDaily');
-        Route::get('get-history-patient-requests/{report}/{patient_request}', 'getHistoryPatientRequests');
-        Route::patch('move-patient-request-from-history/{patient_request}', 'movePatientRequestFromHistory');
-        Route::patch('move-patient-request-from-processes/{patient_request}', 'movePatientRequestFromProcesses');
-        Route::patch('move-patient-request-from-others/{patient_request}', 'movePatientRequestFromOthers');
-        Route::patch('undo-patient-request/{patient_request}', 'undoPatientRequest');
-        Route::get('get-payment-professionals', 'getPaymentProfessionals');
-        Route::patch('process-patient-request-to-payment/{patient_request}', 'processPatientRequestToPayment');
-        Route::patch('finish-back-patient-request/{patient_request}', 'finishBackPatientRequest');
+        // Consultas e listagens de solicitações
+        Route::get('patient-requests', 'getPatientRequests')->name('patient-requests.index');
+        Route::get('patient-requests/archived', 'getArchivePatientRequests')->name('patient-requests.archived');
+        Route::get('patient-requests/{report}/{patient_request}/history', 'getHistoryPatientRequests')->name('patient-requests.history');
+        Route::get('patient-cares/{patient_care}/balance', 'getBalance')->name('patient-cares.balance');
+
+        // CRUD de Ajudas de Custo (CostAssistances)
+        Route::get('patient-requests/{patient_request}', 'getCostAssistances')->name('index');
+        Route::post('patient-requests/{patient_request}', 'createCostAssistance')->name('store');
+        Route::patch('{cost_assistance}', 'updateCostAssistance')->name('update');
+        Route::delete('{cost_assistance}', 'deleteCostAssistance')->name('destroy');
+
+        // Diárias das Ajudas de Custo (CostAssistanceDailies)
+        Route::get('{cost_assistance}/dailies', 'getCostAssistanceDailies')->name('dailies.index');
+        Route::post('{cost_assistance}/dailies', 'createCostAssistanceDaily')->name('dailies.store');
+        Route::patch('dailies/{cost_assistance_daily}', 'updateCostAssistanceDaily')->name('dailies.update');
+        Route::delete('dailies/{cost_assistance_daily}', 'deleteCostAssistanceDaily')->name('dailies.destroy');
+
+        // Tramitações, movimentações e fluxo financeiro
+        Route::patch('patient-requests/{patient_request}/undo', 'undoPatientRequest')->name('patient-requests.undo');
+        Route::patch('patient-requests/{patient_request}/finish-back', 'finishBackPatientRequest')->name('patient-requests.finish-back');
+        Route::patch('patient-requests/{patient_request}/process-to-payment', 'processPatientRequestToPayment')->name('patient-requests.process-to-payment');
+
+        // Ações de estado, movimentações e arquivamento
+        Route::patch('patient-requests/{patient_request}/halted', 'haltedPatientRequest')->name('patient-requests.halt');
+        Route::patch('patient-requests/{patient_request}/archive', 'archivePatientRequest')->name('patient-requests.archive');
+        Route::patch('patient-requests/{patient_request}/move-from-archive', 'movePatientRequestFromArchive')->name('patient-requests.move-from-archive');
+        Route::patch('patient-requests/{patient_request}/move-from-history', 'movePatientRequestFromHistory')->name('patient-requests.move-from-history');
+        Route::patch('patient-requests/{patient_request}/move-from-others', 'movePatientRequestFromOthers')->name('patient-requests.move-from-others');
+
+        // Consultas auxiliares
+        Route::get('daily-costs', 'getDailyCosts')->name('daily-costs.index');
+        Route::get('payment-professionals', 'getPaymentProfessionals')->name('payment-professionals.index');
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('accountability')
+    ->prefix('accountabilities')
+    ->name('accountabilities.')
     ->controller(AccountabilityController::class)
     ->group(function () {
-        Route::get('get-patient-requests', 'getPatientRequests');
-        Route::get('get-archive-patient-requests', 'getArchivePatientRequests');
-        Route::patch('halted-patient-request/{patient_request}', 'haltedPatientRequest');
-        Route::get('get-accountabilities/{patient_request}', 'getAccountabilities');
-        Route::get('get-balance/{patient_care}', 'getBalance');
-        Route::post('create-accountability/{patient_request}', 'createAccountability');
-        Route::patch('update-accountability/{accountability}', 'updateAccountability');
-        Route::delete('delete-accountability/{accountability}', 'deleteAccountability');
-        Route::get('get-accountability-dailies/{accountability}', 'getAccountabilityDailies');
-        Route::post('create-accountability-daily/{accountability}', 'createAccountabilityDaily');
-        Route::patch('update-accountability-daily/{accountability_daily}', 'updateAccountabilityDaily');
-        Route::delete('delete-accountability-daily/{accountability_daily}', 'deleteAccountabilityDaily');
-        Route::patch('archive-patient-request/{patient_request}', 'archivePatientRequest');
-        Route::patch('move-patient-request-from-archive/{patient_request}', 'movePatientRequestFromArchive');
+        // Consultas e listagens de solicitações
+        Route::get('patient-requests', 'getPatientRequests')->name('patient-requests.index');
+        Route::get('patient-requests/archived', 'getArchivePatientRequests')->name('patient-requests.archived');
+        Route::get('patient-cares/{patient_care}/balance', 'getBalance')->name('patient-cares.balance');
+
+        // CRUD de Prestações de Contas (Accountabilities)
+        Route::get('patient-requests/{patient_request}', 'getAccountabilities')->name('index');
+        Route::post('patient-requests/{patient_request}', 'createAccountability')->name('store');
+        Route::patch('{accountability}', 'updateAccountability')->name('update');
+        Route::delete('{accountability}', 'deleteAccountability')->name('destroy');
+
+        // Diárias da Prestação de Contas (AccountabilityDailies)
+        Route::get('{accountability}/dailies', 'getAccountabilityDailies')->name('dailies.index');
+        Route::post('{accountability}/dailies', 'createAccountabilityDaily')->name('dailies.store');
+        Route::patch('dailies/{accountability_daily}', 'updateAccountabilityDaily')->name('dailies.update');
+        Route::delete('dailies/{accountability_daily}', 'deleteAccountabilityDaily')->name('dailies.destroy');
+
+        // Ações de estado, movimentações e arquivamento
+        Route::patch('patient-requests/{patient_request}/halted', 'haltedPatientRequest')->name('patient-requests.halt');
+        Route::patch('patient-requests/{patient_request}/archive', 'archivePatientRequest')->name('patient-requests.archive');
+        Route::patch('patient-requests/{patient_request}/move-from-others', 'movePatientRequestFromOthers')->name('patient-requests.move');
+
+        // Consultas auxiliares
+        Route::get('daily-costs', 'getDailyCosts')->name('daily-costs.index');
     });
 
 Route::middleware(['api', Auth::class])
