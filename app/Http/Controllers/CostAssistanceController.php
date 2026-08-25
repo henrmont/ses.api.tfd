@@ -69,6 +69,7 @@ class CostAssistanceController extends Controller
                 'travels.passengers.patient',
                 'travels.passengers.escort',
                 'costAssistances.costAssistanceDailies.dailyCost',
+                'costAssistances.payment',
                 'accountabilities.accountabilityDailies.dailyCost',
             ])
             ->latest('id')
