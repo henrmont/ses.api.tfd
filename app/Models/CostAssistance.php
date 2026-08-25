@@ -32,6 +32,11 @@ class CostAssistance extends Model
         return $this->belongsTo(Passenger::class);
     }
 
+    public function payment()
+    {
+        return $this->hasOne(Payment::class);
+    }
+
     protected $appends = [
         'status',
         'total_amount',

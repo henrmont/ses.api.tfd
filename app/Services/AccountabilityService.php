@@ -85,6 +85,34 @@ class AccountabilityService
     }
 
     /**
+     * Restaurar solicitação arquivada.
+     */
+    public function movePatientRequestFromArchive(PatientRequest $patient_request): JsonResponse
+    {
+        try {
+            $this->tfd()->beginTransaction();
+
+            $professionalId = Professional::where('user_id', auth()->id())->value('id');
+
+            $patient_request->update([
+                'back_to_accountability' => 'Retirou do arquivo',
+                'accountability_professional_id' => $professionalId,
+                'is_accountability_archived' => false,
+            ]);
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Solicitação retirada do arquivo.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao mover solicitação do arquivo: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
      * Arquivar a etapa da solicitação.
      */
     public function archivePatientRequest(PatientRequest $patient_request): JsonResponse
@@ -93,7 +121,7 @@ class AccountabilityService
             $this->tfd()->beginTransaction();
 
             $patient_request->update([
-                'is_cost_assistance_archived' => true,
+                'is_accountability_archived' => true,
             ]);
 
             $this->tfd()->commit();

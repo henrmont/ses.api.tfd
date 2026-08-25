@@ -49,7 +49,7 @@ class AccountabilityController extends Controller
             ->where(function ($query) {
                 $query->whereNull('back_to_social')->orWhereNull('back_from_cost_assistance');
             })
-            ->where('is_cost_assistance_archived', false)
+            ->where('is_accountability_archived', false)
             ->where('type', 'Agendamento')
             ->with([
                 'report.patientCare.patient',
@@ -83,19 +83,20 @@ class AccountabilityController extends Controller
 
         $patientRequests = PatientRequest::query()
             ->notPatientBack()
+            ->whereNull('back_to_travel')
             ->where(function ($query) {
-                $query->whereNull('back_to_owner')->orWhereNull('back_from_travel');
+                $query->whereNull('back_to_owner')->orWhereNull('back_from_cost_assistance');
             })
             ->where(function ($query) {
-                $query->whereNull('back_to_medical')->orWhereNull('back_from_travel');
+                $query->whereNull('back_to_medical')->orWhereNull('back_from_cost_assistance');
             })
             ->where(function ($query) {
-                $query->whereNull('back_to_social')->orWhereNull('back_from_travel');
+                $query->whereNull('back_to_social')->orWhereNull('back_from_cost_assistance');
             })
-            ->where('is_cost_assistance_archived', true)
+            ->where('is_accountability_archived', true)
+            ->where('type', 'Agendamento')
             ->with([
                 'report.patientCare.patient',
-                'report.patientCare.user.professional',
                 'report.cid',
                 'report.attachments',
                 'attachments',
@@ -154,13 +155,23 @@ class AccountabilityController extends Controller
     }
 
     /**
-     * Arquivar a solicitação de prestação de contas.
+     * Mover solicitação a partir do arquivo.
+     */
+    public function movePatientRequestFromArchive(PatientRequest $patient_request)
+    {
+        $this->authorize('tfd/ajuda de custo atualizar');
+
+        return $this->accountabilityService->movePatientRequestFromArchive($patient_request);
+    }
+
+    /**
+     * Arquivar a solicitação de ajuda de custo.
      */
     public function archivePatientRequest(PatientRequest $patient_request)
     {
         $this->authorize('tfd/ajuda de custo atualizar');
 
-        return $this->patientRequestService->archiveAccountabilityPatientRequest($patient_request);
+        return $this->accountabilityService->archivePatientRequest($patient_request);
     }
 
     /*

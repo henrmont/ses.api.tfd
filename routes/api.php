@@ -314,6 +314,7 @@ Route::middleware(['api', Auth::class])
         // Ações de estado, movimentações e arquivamento
         Route::patch('patient-requests/{patient_request}/halted', 'haltedPatientRequest')->name('patient-requests.halt');
         Route::patch('patient-requests/{patient_request}/archive', 'archivePatientRequest')->name('patient-requests.archive');
+        Route::patch('patient-requests/{patient_request}/move-from-archive', 'movePatientRequestFromArchive')->name('patient-requests.move-from-archive');
         Route::patch('patient-requests/{patient_request}/move-from-others', 'movePatientRequestFromOthers')->name('patient-requests.move');
 
         // Consultas auxiliares

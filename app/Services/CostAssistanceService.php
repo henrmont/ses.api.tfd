@@ -122,10 +122,8 @@ class CostAssistanceService
             $professionalId = Professional::where('user_id', auth()->id())->value('id');
 
             $patient_request->update([
-                'back_to_accountability' => 'Retirou do arquivo',
                 'back_to_cost_assistance' => 'Retirou do arquivo',
                 'cost_assistance_professional_id' => $professionalId,
-                'accountability_professional_id' => $professionalId,
                 'is_cost_assistance_archived' => false,
             ]);
 

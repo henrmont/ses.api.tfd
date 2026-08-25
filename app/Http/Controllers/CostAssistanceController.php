@@ -54,6 +54,7 @@ class CostAssistanceController extends Controller
             ->where('is_cost_assistance_archived', false)
             ->where('type', 'Agendamento')
             ->with([
+                'report.patientCare.user.professional',    
                 'report.patientCare.patient',
                 'report.cid',
                 'report.attachments',
@@ -98,6 +99,7 @@ class CostAssistanceController extends Controller
             ->where('is_cost_assistance_archived', true)
             ->where('type', 'Agendamento')
             ->with([
+                'report.patientCare.user.professional',   
                 'report.patientCare.patient',
                 'report.cid',
                 'report.attachments',
@@ -146,8 +148,6 @@ class CostAssistanceController extends Controller
                 'travels.passengers.escort',
                 'costAssistances.costAssistanceDailies.dailyCost',
                 'accountabilities.accountabilityDailies.dailyCost',
-                // 'paymentInfo',
-                // 'paymentAttachments',
             ])
             ->latest('id')
             ->get();

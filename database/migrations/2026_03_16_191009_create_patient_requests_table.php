@@ -40,6 +40,7 @@ return new class extends Migration
             $table->boolean('is_opinion_archived')->default(false);
             $table->boolean('is_travel_archived')->default(false);
             $table->boolean('is_cost_assistance_archived')->default(false);
+            $table->boolean('is_accountability_archived')->default(false);
             $table->softDeletes();
             $table->timestamps();
         });

@@ -42,6 +42,7 @@ class PatientRequest extends Model
         'is_opinion_archived',
         'is_travel_archived',
         'is_cost_assistance_archived',
+        'is_accountability_archived'
     ];
 
     // Scopes
