@@ -17,7 +17,7 @@ use App\Http\Middleware\Auth;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['api', Auth::class])
-    ->prefix('users')
+    ->prefix('tfd/users')
     ->name('users.')
     ->controller(UserController::class)
     ->group(function () {
@@ -41,7 +41,7 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('roles')
+    ->prefix('tfd/roles')
     ->name('roles.')
     ->controller(RoleController::class)
     ->group(function () {
@@ -56,7 +56,7 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('hospital-unity')
+    ->prefix('tfd/hospital-unity')
     ->controller(HospitalUnityController::class)
     ->group(function () {
         Route::get('get-hospital-unities', 'getHospitalUnities');
@@ -66,7 +66,7 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('datasus')
+    ->prefix('tfd/datasus')
     ->controller(DatasusController::class)
     ->group(function () {
         Route::get('get-competences', 'getCompetences');
@@ -87,7 +87,7 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('patients')
+    ->prefix('tfd/patients')
     ->name('patients.')
     ->controller(PatientController::class)
     ->group(function () {
@@ -131,7 +131,7 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('patient-requests')
+    ->prefix('tfd/patient-requests')
     ->name('patient-requests.')
     ->controller(PatientRequestController::class)
     ->group(function () {
@@ -172,7 +172,7 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('opinions')
+    ->prefix('tfd/opinions')
     ->name('opinions.')
     ->controller(OpinionController::class)
     ->group(function () {
@@ -208,7 +208,7 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('travels')
+    ->prefix('tfd/travels')
     ->name('travels.')
     ->controller(TravelController::class)
     ->group(function () {
@@ -250,7 +250,7 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('cost-assistances')
+    ->prefix('tfd/cost-assistances')
     ->name('cost-assistances.')
     ->controller(CostAssistanceController::class)
     ->group(function () {
@@ -290,7 +290,7 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('accountabilities')
+    ->prefix('tfd/accountabilities')
     ->name('accountabilities.')
     ->controller(AccountabilityController::class)
     ->group(function () {
@@ -322,7 +322,7 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('payments')
+    ->prefix('tfd/payments')
     ->name('payments.')
     ->controller(PaymentController::class)
     ->group(function () {
