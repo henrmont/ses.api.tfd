@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\PatientEvent;
 use App\Models\Archive;
 use App\Models\Escort;
 use App\Models\Patient;
@@ -60,35 +61,57 @@ class PatientService
             $this->core()->beginTransaction();
             $this->storage()->beginTransaction();
 
+            // 1. Limpa os campos de controle e arquivos do payload
+            $patientData = $request->except([
+                'observation', 
+                'control_number', 
+                'file_cns', 
+                'file_document', 
+                'file_deficiency', 
+                'file_address',
+                'file_protocol'
+            ]);
+
+            // 2. Busca o paciente na conexão 'core'
             $patient = Patient::on('core')
-                ->where('cns', $request->cns)
-                ->orWhere('document', $request->document)
+                ->where(function ($query) use ($request) {
+                    $query->where('cns', $request->cns)
+                        ->orWhere('document', $request->document);
+                })
                 ->first();
 
             if ($patient) {
-                $patient->update($request->all());
+                $patient->update($patientData);
+                $patientId = $patient->id;
             } else {
-                $patient = Patient::on('core')->create(
-                    $request->except(['observation', 'control_number'])
-                );
+                // Insere diretamente via Query Builder na conexão 'core' e recupera o ID
+                $patientId = $this->core()->table('patients')->insertGetId($patientData);
             }
 
-            PatientCare::on('core')->create([
-                'patient_id' => $patient->id,
-                'module_id' => auth()->user()->module_id,
-                'user_id' => auth()->user()->id,
-            ]);
+            // 3. Insere os dados na tabela 'patient_cares' na conexão 'core'
+            $patientCareId = $this->core()
+                ->table('patient_cares')
+                ->insertGetId([
+                    'patient_id' => $patientId,
+                    'module_id'  => auth()->user()->module_id,
+                    'user_id'    => auth()->user()->id,
+                ]);
 
+            // Recria a variável $patient como uma instância do Model na conexão 'core'
+            $patient = Patient::on('core')->find($patientId);
+
+            // 4. Processa os anexos com a variável $patient recriada
             $this->processFileAttachments($patient, $request, [
-                'file_cns' => 'file_cns_id',
-                'file_document' => 'file_document_id',
+                'file_cns'        => 'file_cns_id',
+                'file_document'   => 'file_document_id',
                 'file_deficiency' => 'file_deficiency_id',
-                'file_address' => 'file_address_id',
+                'file_address'    => 'file_address_id',
             ]);
 
+            // 5. Cria o PatientInfo na conexão padrão (TFD)
             $patientInfo = PatientInfo::create([
-                'patient_id' => $patient->id,
-                'observation' => $request->observation,
+                'patient_id'     => $patientId,
+                'observation'    => $request->observation,
                 'control_number' => $request->control_number,
             ]);
 
@@ -96,6 +119,7 @@ class PatientService
                 'file_protocol' => 'file_protocol_id',
             ]);
 
+            // Commits
             $this->tfd()->commit();
             $this->core()->commit();
             $this->storage()->commit();
@@ -126,23 +150,27 @@ class PatientService
             $patient->update($request->except(['observation', 'control_number']));
 
             $this->processFileAttachments($patient, $request, [
-                'file_cns' => 'file_cns_id',
-                'file_document' => 'file_document_id',
+                'file_cns'        => 'file_cns_id',
+                'file_document'   => 'file_document_id',
                 'file_deficiency' => 'file_deficiency_id',
-                'file_address' => 'file_address_id',
+                'file_address'    => 'file_address_id',
             ]);
 
-            if ($patient->patientInfo) {
-                $patient->patientInfo()->update($request->only(['observation', 'control_number']));
+            $patient_info = PatientInfo::query()
+                ->updateOrCreate(
+                    ['patient_id' => $patient_care->patient->id],
+                    $request->only(['observation', 'control_number'])
+                );
 
-                $this->processFileAttachments($patient->patientInfo, $request, [
-                    'file_protocol' => 'file_protocol_id',
-                ]);
-            }
+            $this->processFileAttachments($patient_info, $request, [
+                'file_protocol' => 'file_protocol_id',
+            ]);
 
             $this->tfd()->commit();
             $this->core()->commit();
             $this->storage()->commit();
+
+            // broadcast(new PatientEvent($patient_care))->toOthers();
 
             return response()->json(['message' => 'Paciente atualizado com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {

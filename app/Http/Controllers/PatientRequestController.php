@@ -33,15 +33,8 @@ class PatientRequestController extends Controller
     {
         $this->authorize('tfd/solicitação listar');
 
-        $userProfessionalId = Professional::where('user_id', auth()->id())->value('id');
-
         $patientRequests = PatientRequest::query()
             ->notPatientBack()
-            ->where(function ($query) use ($userProfessionalId) {
-                $query->whereNull('back_to_owner')
-                    ->orWhere('back_from_cost_assistance', $userProfessionalId)
-                    ->orWhere('back_from_travel', $userProfessionalId);
-            })
             ->where('is_opinion_archived', false)
             ->with([
                 'report.patientCare.patient',

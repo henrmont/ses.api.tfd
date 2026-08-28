@@ -7,6 +7,7 @@ use App\Models\Professional;
 use App\Models\User;
 use App\Models\UserModule;
 use Exception;
+use Illuminate\Database\Connection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,22 @@ use Spatie\Permission\Models\Role;
 
 class UserService
 {
+    /**
+     * Conexão com o banco padrão (TFD).
+     */
+    private function tfd(): Connection
+    {
+        return DB::connection();
+    }
+
+    /**
+     * Conexão com o banco Core.
+     */
+    private function auth(): Connection
+    {
+        return DB::connection('auth');
+    }
+    
     protected ?Module $module;
 
     public function __construct()
@@ -29,44 +46,49 @@ class UserService
     public function createUser(Request $request): JsonResponse
     {
         try {
-            DB::beginTransaction();
+            $this->tfd()->beginTransaction();
+            $this->auth()->beginTransaction();
 
             $user = User::where('email', $request->email)->first();
             $professionalPayload = $this->getProfessionalPayload($request);
 
             if (!$user) {
-                $user = User::on('auth')->create([
-                    'email' => $request->email,
-                    'name' => $request->email,
-                    'password' => Hash::make('12345678'),
-                    'module_id' => $this->module?->id,
-                ]);
-
-                $user->userModule()->create([
-                    'module_id' => $this->module?->id,
-                ]);
+                // 1. Insere o usuário na tabela 'users' da conexão 'auth' e obtém o ID
+                $userId = $this->auth()
+                    ->table('users')
+                    ->insertGetId([
+                        'email'      => $request->email,
+                        'name'       => $request->email,
+                        'password'   => Hash::make('12345678'),
+                        'module_id'  => $this->module?->id,
+                    ]);
             } else {
                 $user->update([
                     'is_valid' => true,
                     'module_id' => $this->module?->id,
                 ]);
-
-                UserModule::on('auth')->create([
-                    'user_id' => $user->id,
-                    'module_id' => $this->module?->id,
-                ]);
             }
 
+            $this->auth()
+                ->table('user_modules')
+                ->insert([
+                    'user_id'    => $user ? $user->id : $userId,
+                    'module_id'  => $this->module?->id,
+                ]);
+
             Professional::create(array_merge(
-                ['user_id' => $user->id],
+                ['user_id' => $user ? $user->id : $userId],
                 $professionalPayload
             ));
 
-            DB::commit();
+            $this->tfd()->commit();
+            $this->auth()->commit();
 
             return response()->json(['message' => 'Usuário criado com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
-            DB::rollBack();
+            $this->tfd()->rollBack();
+            $this->auth()->rollBack();
+
             Log::error('Erro ao criar usuário: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);

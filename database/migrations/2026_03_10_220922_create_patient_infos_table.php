@@ -18,7 +18,8 @@ return new class extends Migration
             $table->integer('control_number')->nullable();
             $table->foreignId('file_protocol_id')->nullable();
             $table->softDeletes();
-            $table->timestamps();
+            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
         });
     }
 

@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class PatientInfo extends Model
 {
     use SoftDeletes;
+
+    protected $connection = 'pgsql';
     
     protected $fillable = [
         'patient_id',
