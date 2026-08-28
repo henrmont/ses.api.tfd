@@ -73,7 +73,7 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('settings')
+    ->prefix('tfd/settings')
     ->name('settings.')
     ->controller(SettingController::class)
     ->group(function () {
@@ -160,15 +160,6 @@ Route::middleware(['api', Auth::class])
         Route::get('patients/{patient_care}/reports', 'getPatientReports')->name('patients.reports.index');
         Route::get('hospital-unities', 'getHospitalUnities')->name('hospital-unities.index');
         Route::get('medical-professionals', 'getMedicalProfessionals')->name('medical-professionals.index');
-    });
-
-Route::middleware(['api', Auth::class])
-    ->prefix('search')
-    ->controller(SearchController::class)
-    ->group(function () {
-        Route::get('get-patients', 'getPatients');
-        Route::get('get-archived-patients', 'getArchivedPatients');
-        Route::get('get-archived-patient-requests', 'getArchivedPatientRequests');
     });
 
 Route::middleware(['api', Auth::class])
@@ -343,33 +334,6 @@ Route::middleware(['api', Auth::class])
         // Emissão de documentos e PDFs
         Route::get('{payment}/download-merged-pdf', 'downloadMergedPdf')->name('download-merged-pdf');
         Route::get('{payment}/download-memo-pdf', 'downloadMemoPdf')->name('download-memo-pdf');
-    });
-
-// CHECKS
-Route::middleware(['api', Auth::class])
-    ->prefix('checks')
-    ->group(function () {
-        // Patient Checks
-        Route::get('get-patient-cns/{cns}', [PatientController::class, 'getPatientCns']);
-        Route::get('get-patient-document/{document}', [PatientController::class, 'getPatientDocument']);
-        Route::get('get-escort-cns/{cns}', [PatientController::class, 'getEscortCns']);
-        Route::get('get-escort-document/{document}', [PatientController::class, 'getEscortDocument']);
-    });
-
-// VALIDATORS
-Route::middleware(['api', Auth::class])
-    ->prefix('validator')
-    ->group(function () {
-        // User Validators
-        Route::get('email-user-exists/{email}/{data?}', [UserController::class, 'emailUserExists']);
-        Route::get('cns-user-exists/{cns}/{data?}', [UserController::class, 'cnsUserExists']);
-        // Patient Validators
-        Route::get('cns-patient-exists/{cns}/{data?}', [PatientController::class, 'cnsPatientExists']);
-        Route::get('cns-escort-exists/{patient_care}/{cns}/{data?}', [PatientController::class, 'cnsEscortExists']);
-        Route::get('document-patient-exists/{document}/{data?}', [PatientController::class, 'documentPatientExists']);
-        Route::get('document-escort-exists/{patient_care}/{document}/{data?}', [PatientController::class, 'documentEscortExists']);
-        // Travel Validators
-        Route::get('passenger-exists/{travel}', [TravelController::class, 'passengerExists']);
     });
 
 
