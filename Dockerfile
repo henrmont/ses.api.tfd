@@ -1,8 +1,9 @@
-# Imagem base oficial do PHP em Alpine (muito leve)
 FROM php:8.4-fpm
 
-# Instala dependências do sistema necessárias para as extensões do PHP
+# 1. Instala dependências do sistema, Nginx e Supervisor
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    nginx \
+    supervisor \
     libpng-dev \
     libjpeg62-turbo-dev \
     libfreetype6-dev \
@@ -15,34 +16,44 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && docker-php-ext-install -j$(nproc) pdo pdo_pgsql zip bcmath gd \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Instala extensões do PHP necessárias para o Laravel e PostgreSQL
-RUN docker-php-ext-install pdo pdo_pgsql zip bcmath
-
-# Copia a ferramenta Composer da imagem oficial
+# 2. Instalação do Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
-# Copia os arquivos de gerenciamento de dependências
+# 3. Copia arquivos de dependência
 COPY package*.json ./
 COPY composer.json composer.lock ./
 
-# Instala dependências do Composer sem pacotes de dev (otimizado para produção)
+# 4. Instala dependências do Composer sem pacotes de desenvolvimento
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 
-# Copia todo o código da aplicação
+# 5. Copia todo o código da aplicação
 COPY . .
 
-# Finaliza a instalação das dependências gerando o autoloader do Composer
-RUN composer dump-autoload --optimize
+# --- NOVO: Garante a criação do .env a partir do .env.example ---
+RUN if [ -f .env.example ]; then cp .env.example .env; fi
 
-# Permissões necessárias para as pastas de escrita do Laravel
+# 6. Otimização do Autoloader
+RUN composer dump-autoload --optimize \
+    && php artisan config:clear || true \
+    && php artisan route:clear || true
+
+# 7. Ajuste de permissões para pastas de escrita do Laravel e para o arquivo .env
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache \
-    && chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+    && chmod -R 775 /var/www/storage /var/www/bootstrap/cache \
+    && if [ -f /var/www/.env ]; then chown www-data:www-data /var/www/.env && chmod 664 /var/www/.env; fi
 
-EXPOSE 9001
+# 8. Copia as configurações do Nginx e do Supervisor
+COPY ./docker/nginx.conf /etc/nginx/sites-available/default
+COPY ./docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Script de inicialização: roda caches e inicia o servidor na porta 9001
-CMD php artisan config:cache \
-    && php artisan route:cache \
-    && php artisan serve --host=0.0.0.0 --port=9001
+# Associa o arquivo de site habilitado no Nginx
+RUN rm -f /etc/nginx/sites-enabled/default \
+    && ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+
+# Expõe a porta 80
+EXPOSE 80
+
+# Inicializa o Supervisor que gerenciará o PHP-FPM e o Nginx em background
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
