@@ -56,23 +56,6 @@ Route::middleware(['api', Auth::class])
     });
 
 Route::middleware(['api', Auth::class])
-    ->prefix('tfd/hospital-unity')
-    ->controller(HospitalUnityController::class)
-    ->group(function () {
-        Route::get('get-hospital-unities', 'getHospitalUnities');
-        Route::post('create-hospital-unity', 'createHospitalUnity');
-        Route::patch('update-hospital-unity/{hospital_unity}', 'updateHospitalUnity');
-        Route::delete('delete-hospital-unity/{hospital_unity}', 'deleteHospitalUnity');
-    });
-
-Route::middleware(['api', Auth::class])
-    ->prefix('tfd/datasus')
-    ->controller(DatasusController::class)
-    ->group(function () {
-        Route::get('get-competences', 'getCompetences');
-    });
-
-Route::middleware(['api', Auth::class])
     ->prefix('tfd/settings')
     ->name('settings.')
     ->controller(SettingController::class)
