@@ -18,6 +18,13 @@ class UserController extends Controller
         protected UserService $userService
     ) {}
 
+    public function getMe(): JsonResponse
+    {
+        $me = User::with('roles.permissions', 'professional.types')->find(auth()->id());
+
+        return response()->json($me, JsonResponse::HTTP_OK);
+    }
+
     /**
      * Listar usuários do sistema TFD.
      */
@@ -27,7 +34,7 @@ class UserController extends Controller
 
         $users = User::query()
             ->tfd()
-            ->with(['roles', 'professional'])
+            ->with(['roles', 'professional.types'])
             ->where('email', '!=', 'admin@tfd.com')
             ->latest('id')
             ->get();

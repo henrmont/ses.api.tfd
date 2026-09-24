@@ -14,7 +14,6 @@ class Professional extends Model
     protected $fillable = [
         'user_id',
         'name',
-        'type',
         'cns',
         'registration',
         'professional_register',
@@ -25,6 +24,11 @@ class Professional extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function types(): HasMany
+    {
+        return $this->hasMany(ProfessionalType::class);
     }
 
     public function patientMedicalRequests(): HasMany

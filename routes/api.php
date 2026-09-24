@@ -21,6 +21,7 @@ Route::middleware(['api', Auth::class])
     ->name('users.')
     ->controller(UserController::class)
     ->group(function () {
+        Route::get('/me', 'getMe')->name('me');
         // Listagem
         Route::get('/', 'getUsers')->name('index');
         Route::get('roles', 'getRoles')->name('roles.index');

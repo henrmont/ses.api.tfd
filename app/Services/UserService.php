@@ -76,10 +76,20 @@ class UserService
                     'module_id'  => $this->module?->id,
                 ]);
 
-            Professional::create(array_merge(
+            // 2. Cria o registro do profissional no TFD
+            $professional = Professional::create(array_merge(
                 ['user_id' => $user ? $user->id : $userId],
                 $professionalPayload
             ));
+
+            // 3. Cria os tipos de profissional associados
+            if ($request->has('types') && is_array($request->types)) {
+                foreach ($request->types as $type) {
+                    $professional->types()->create([
+                        'type' => $type,
+                    ]);
+                }
+            }
 
             $this->tfd()->commit();
             $this->auth()->commit();
@@ -151,19 +161,39 @@ class UserService
     }
 
     /**
-     * Atualizar dados do perfil profissional associado ao usuário.
+     * Atualizar dados do perfil profissional e sincronizar lotações associadas ao usuário.
      */
     public function updateUser(User $user, Request $request): JsonResponse
     {
         try {
-            $user->professional()->updateOrCreate(
+            $this->tfd()->beginTransaction();
+
+            // 1. Atualiza ou cria o registro do profissional
+            $professional = $user->professional()->updateOrCreate(
                 ['user_id' => $user->id],
                 $this->getProfessionalPayload($request)
             );
 
+            // 2. Sincroniza as lotações (ProfessionalType)
+            if ($request->has('types') && is_array($request->types)) {
+                // Remove os tipos antigos
+                $professional->types()->delete();
+
+                // Prepara e insere os novos tipos
+                $newTypes = array_map(function ($type) {
+                    return ['type' => $type];
+                }, $request->types);
+
+                $professional->types()->createMany($newTypes);
+            }
+
+            $this->tfd()->commit();
+
             return response()->json(['message' => 'Usuário atualizado com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
-            Log::error('Erro ao atualizar usuário: ' . $e->getMessage());
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao atualizar usuário: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
@@ -230,7 +260,6 @@ class UserService
     {
         return $request->only([
             'name',
-            'type',
             'cns',
             'registration',
             'professional_register',
