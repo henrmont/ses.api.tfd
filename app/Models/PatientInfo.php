@@ -17,7 +17,8 @@ class PatientInfo extends Model
         'patient_id',
         'observation',
         'control_number',
-        'file_protocol_id',
+        'sigadoc',
+        'file_sigadoc_id',
     ];
 
     // Relationships

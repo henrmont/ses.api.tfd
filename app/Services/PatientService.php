@@ -65,11 +65,12 @@ class PatientService
             $patientData = $request->except([
                 'observation', 
                 'control_number', 
+                'sigadoc',
                 'file_cns', 
                 'file_document', 
                 'file_deficiency', 
                 'file_address',
-                'file_protocol'
+                'file_sigadoc'
             ]);
 
             // 2. Busca o paciente na conexão 'core'
@@ -113,10 +114,11 @@ class PatientService
                 'patient_id'     => $patientId,
                 'observation'    => $request->observation,
                 'control_number' => $request->control_number,
+                'sigadoc'        => $request->sigadoc,
             ]);
 
             $this->processFileAttachments($patientInfo, $request, [
-                'file_protocol' => 'file_protocol_id',
+                'file_sigadoc' => 'file_sigadoc_id',
             ]);
 
             // Commits
@@ -159,11 +161,11 @@ class PatientService
             $patient_info = PatientInfo::query()
                 ->updateOrCreate(
                     ['patient_id' => $patient_care->patient->id],
-                    $request->only(['observation', 'control_number'])
+                    $request->only(['observation', 'control_number', 'sigadoc'])
                 );
 
             $this->processFileAttachments($patient_info, $request, [
-                'file_protocol' => 'file_protocol_id',
+                'file_sigadoc' => 'file_sigadoc_id',
             ]);
 
             $this->tfd()->commit();

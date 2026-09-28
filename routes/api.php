@@ -75,43 +75,55 @@ Route::middleware(['api', Auth::class])
     ->name('patients.')
     ->controller(PatientController::class)
     ->group(function () {
-        // Listagem e CRUD principal
+        // ==========================================
+        // 1. RECURSO PRINCIPAL: PACIENTES (PATIENT CARES)
+        // ==========================================
         Route::get('/', 'getPatients')->name('index');
         Route::get('archived', 'getArchivePatients')->name('archived');
         Route::post('/', 'createPatient')->name('store');
-        Route::post('{patient_care}', 'updatePatient')->name('update'); // Mantido método POST para suporte a upload de arquivos
+        Route::post('{patient_care}', 'updatePatient')->name('update'); // POST com suporte a multipart/form-data
 
-        // Ações de estado e movimentações
+        // Ações de Estado e Transições
         Route::patch('{patient_care}/archive', 'archivePatient')->name('archive');
-        Route::patch('{patient_care}/move-from-archive', 'movePatientFromArchive')->name('unarchive');
-        Route::patch('{patient_care}/move-from-others', 'movePatientFromOthers')->name('transfer-to-me');
+        Route::patch('{patient_care}/move-from-archive', 'movePatientFromArchive')->name('move-from-archive');
+        Route::patch('{patient_care}/move-from-others', 'movePatientFromOthers')->name('move-from-others');
         Route::patch('{patient_care}/validate', 'validatePatient')->name('validate');
-        Route::patch('{patient_care}/finish-back', 'finishBackPatient')->name('finish-return');
+        Route::patch('{patient_care}/finish-back', 'finishBackPatient')->name('finish-back');
 
-        // Acompanhantes
+        // ==========================================
+        // 2. CONSULTAS DIRETAS / VALIDAÇÕES (SEARCH)
+        // ==========================================
+        Route::get('search/cns/{cns}', 'getPatientCns')->name('search.cns');
+        Route::get('search/document/{document}', 'getPatientDocument')->name('search.document');
+
+        // ==========================================
+        // 3. SUB-RECURSO: ACOMPANHANTES (ESCORTS)
+        // ==========================================
         Route::get('{patient_care}/escorts', 'getPatientEscorts')->name('escorts.index');
         Route::post('{patient_care}/escorts', 'createPatientEscort')->name('escorts.store');
-        Route::post('escorts/{escort}', 'updatePatientEscort')->name('escorts.update'); // Mantido método POST para suporte a upload de arquivos
-        Route::delete('escorts/{patient_care_escort}', 'deletePatientEscort')->name('escorts.destroy');
+        Route::post('{patient_care}/escorts/{escort}', 'updatePatientEscort')->name('escorts.update');
+        Route::delete('{patient_care}/escorts/{patient_care_escort}', 'deletePatientEscort')->name('escorts.destroy');
 
-        // Laudos e CIDs
-        Route::get('{patient_care}/reports', 'getPatientReports')->name('reports.index');
+        // Consultas Diretas de Acompanhantes
+        Route::get('escorts/search/cns/{cns}', 'getEscortCns')->name('escorts.search.cns');
+        Route::get('escorts/search/document/{document}', 'getEscortDocument')->name('escorts.search.document');
+
+        // ==========================================
+        // 4. SUB-RECURSO: LAUDOS (REPORTS) & CIDs
+        // ==========================================
         Route::get('{patient_care}/cids', 'getCids')->name('cids.index');
+        Route::get('{patient_care}/reports', 'getPatientReports')->name('reports.index');
         Route::post('{patient_care}/reports', 'createPatientReport')->name('reports.store');
-        Route::patch('reports/{report}', 'updatePatientReport')->name('reports.update');
-        Route::delete('reports/{report}', 'deletePatientReport')->name('reports.destroy');
+        Route::patch('{patient_care}/reports/{report}', 'updatePatientReport')->name('reports.update');
+        Route::delete('{patient_care}/reports/{report}', 'deletePatientReport')->name('reports.destroy');
 
-        // Anexos do laudo
-        Route::get('reports/{report}/attachments', 'getReportAttachments')->name('reports.attachments.index');
-        Route::post('reports/{report}/attachments', 'createReportAttachment')->name('reports.attachments.store');
-        Route::post('attachments/{report_attachment}', 'updateReportAttachment')->name('reports.attachments.update'); // Mantido método POST para suporte a upload de arquivos
-        Route::delete('attachments/{report_attachment}', 'deleteReportAttachment')->name('reports.attachments.destroy');
-
-        // Consultas diretas (Utilizadas para autopreenchimento e validação)
-        Route::get('cns/{cns}', 'getPatientCns')->name('search.cns');
-        Route::get('document/{document}', 'getPatientDocument')->name('search.document');
-        Route::get('escorts/cns/{cns}', 'getEscortCns')->name('escorts.search.cns');
-        Route::get('escorts/document/{document}', 'getEscortDocument')->name('escorts.search.document');
+        // ==========================================
+        // 5. SUB-RECURSO HIERÁRQUICO: ANEXOS DO LAUDO (ATTACHMENTS)
+        // ==========================================
+        Route::get('{patient_care}/reports/{report}/attachments', 'getReportAttachments')->name('reports.attachments.index');
+        Route::post('{patient_care}/reports/{report}/attachments', 'createReportAttachment')->name('reports.attachments.store');
+        Route::post('{patient_care}/reports/{report}/attachments/{report_attachment}', 'updateReportAttachment')->name('reports.attachments.update');
+        Route::delete('{patient_care}/reports/{report}/attachments/{report_attachment}', 'deleteReportAttachment')->name('reports.attachments.destroy');
     });
 
 Route::middleware(['api', Auth::class])

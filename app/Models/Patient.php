@@ -16,7 +16,6 @@ class Patient extends Model
         'document_type',
         'document',
         'file_document_id',
-        'sigadoc',
         'birth_date',
         'gender',
         'newborn',

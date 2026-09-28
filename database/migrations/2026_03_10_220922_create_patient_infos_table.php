@@ -16,7 +16,8 @@ return new class extends Migration
             $table->foreignId('patient_id');
             $table->string('observation')->nullable();
             $table->integer('control_number')->nullable();
-            $table->foreignId('file_protocol_id')->nullable();
+            $table->string('sigadoc')->nullable();
+            $table->foreignId('file_sigadoc_id')->nullable();
             $table->softDeletes();
             $table->timestamp('created_at')->useCurrent();
             $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();

@@ -165,7 +165,7 @@ class PatientController extends Controller
     /**
      * Atualizar dados do acompanhante.
      */
-    public function updatePatientEscort(Escort $escort, Request $request)
+    public function updatePatientEscort(PatientCare $patient_care, Escort $escort, Request $request)
     {
         $this->authorize('tfd/paciente acompanhantes');
 
@@ -175,7 +175,7 @@ class PatientController extends Controller
     /**
      * Excluir vinculo de acompanhante com o atendimento.
      */
-    public function deletePatientEscort(PatientCareEscort $patient_care_escort)
+    public function deletePatientEscort(PatientCare $patient_care, PatientCareEscort $patient_care_escort)
     {
         $this->authorize('tfd/paciente acompanhantes');
 
@@ -231,7 +231,7 @@ class PatientController extends Controller
     /**
      * Atualizar laudo existente.
      */
-    public function updatePatientReport(Report $report, Request $request)
+    public function updatePatientReport(PatientCare $patient_care, Report $report, Request $request)
     {
         $this->authorize('tfd/paciente laudos');
 
@@ -241,7 +241,7 @@ class PatientController extends Controller
     /**
      * Excluir laudo do atendimento.
      */
-    public function deletePatientReport(Report $report)
+    public function deletePatientReport(PatientCare $patient_care, Report $report)
     {
         $this->authorize('tfd/paciente laudos');
 
@@ -257,7 +257,7 @@ class PatientController extends Controller
     /**
      * Listar anexos de um laudo.
      */
-    public function getReportAttachments(Report $report): JsonResponse
+    public function getReportAttachments(PatientCare $patient_care, Report $report): JsonResponse
     {
         $this->authorize('tfd/paciente laudos');
 
@@ -271,7 +271,7 @@ class PatientController extends Controller
     /**
      * Anexar arquivo a um laudo.
      */
-    public function createReportAttachment(Report $report, Request $request)
+    public function createReportAttachment(PatientCare $patient_care, Report $report, Request $request)
     {
         $this->authorize('tfd/paciente laudos');
 
@@ -281,7 +281,7 @@ class PatientController extends Controller
     /**
      * Atualizar anexo do laudo.
      */
-    public function updateReportAttachment(ReportAttachment $report_attachment, Request $request)
+    public function updateReportAttachment(PatientCare $patient_care, Report $report, ReportAttachment $report_attachment, Request $request)
     {
         $this->authorize('tfd/paciente laudos');
 
@@ -291,7 +291,7 @@ class PatientController extends Controller
     /**
      * Remover anexo do laudo.
      */
-    public function deleteReportAttachment(ReportAttachment $report_attachment)
+    public function deleteReportAttachment(PatientCare $patient_care, Report $report, ReportAttachment $report_attachment)
     {
         $this->authorize('tfd/paciente laudos');
 
@@ -316,7 +316,7 @@ class PatientController extends Controller
         $patient = Patient::query()
             ->withExists(['patientCares as exists_in_tfd' => fn ($q) => $q->tfd()])
             ->where('cns', $cleanCns)
-            ->firstOrFail();
+            ->first();
 
         return response()->json($patient, JsonResponse::HTTP_OK);
     }
@@ -333,7 +333,7 @@ class PatientController extends Controller
         $patient = Patient::query()
             ->withExists(['patientCares as exists_in_tfd' => fn ($q) => $q->tfd()])
             ->where('document', $cleanDocument)
-            ->firstOrFail();
+            ->first();
 
         return response()->json($patient, JsonResponse::HTTP_OK);
     }
@@ -349,7 +349,7 @@ class PatientController extends Controller
 
         $escort = Escort::query()
             ->where('cns', $cleanCns)
-            ->firstOrFail();
+            ->first();
 
         return response()->json($escort, JsonResponse::HTTP_OK);
     }
@@ -365,7 +365,7 @@ class PatientController extends Controller
 
         $escort = Escort::query()
             ->where('document', $cleanDocument)
-            ->firstOrFail();
+            ->first();
 
         return response()->json($escort, JsonResponse::HTTP_OK);
     }
