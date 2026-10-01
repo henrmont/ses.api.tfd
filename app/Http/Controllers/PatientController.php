@@ -38,7 +38,7 @@ class PatientController extends Controller
         $patientCares = PatientCare::query()
             ->tfd()
             ->where('is_archived', false)
-            ->with(['patient.patientInfo', 'user.professional'])
+            ->with(['patient.patientInfo', 'user.professional','escorts','reports.cid','reports.attachments'])
             ->latest('id')
             ->get();
 
@@ -55,7 +55,7 @@ class PatientController extends Controller
         $patientCares = PatientCare::query()
             ->tfd()
             ->where('is_archived', true)
-            ->with(['patient.patientInfo', 'user.professional'])
+            ->with(['patient.patientInfo', 'user.professional','escorts','reports.cid','reports.attachments'])
             ->latest('id')
             ->get();
 

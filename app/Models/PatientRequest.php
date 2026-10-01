@@ -19,9 +19,9 @@ class PatientRequest extends Model
         'medical_professional_id',
         'social_professional_id',
         'travel_professional_id',
-        'owner_professional_id',
         'cost_assistance_professional_id',
         'accountability_professional_id',
+        'owner_professional_id',
         'hospital_unity_id',
         'type',
         'consultation_date',
@@ -31,6 +31,8 @@ class PatientRequest extends Model
         'back_to_social',
         'back_to_travel',
         'back_to_cost_assistance',
+        'back_from_medical',
+        'back_from_social',
         'back_from_travel',
         'back_from_cost_assistance',
         'is_owner_bookmark',
@@ -39,7 +41,9 @@ class PatientRequest extends Model
         'is_travel_bookmark',
         'is_cost_assistance_bookmark',
         'is_accountability_bookmark',
-        'is_opinion_archived',
+        'is_owner_archived',
+        'is_medical_archived',
+        'is_social_archived',
         'is_travel_archived',
         'is_cost_assistance_archived',
         'is_accountability_archived'
@@ -145,6 +149,9 @@ class PatientRequest extends Model
         'has_cost_assistance_with_payment',
         'accountability',
         'accountability_status',
+        'processed',
+        'working',
+        'any_bookmarking'
     ];
 
     protected function owner(): Attribute
@@ -156,9 +163,14 @@ class PatientRequest extends Model
 
     protected function ownerStatus(): Attribute
     {
-        return Attribute::make(
-            get: fn () => true
-        );
+        if (
+            ($this->medical && $this->medical_status) ||
+            ($this->social && $this->social_status) ||
+            ($this->travel && $this->travel_status) ||
+            ($this->cost_assistance && $this->cost_assistance_status)
+        ) 
+            return Attribute::make(get: fn () => true);
+        return Attribute::make(get: fn () => false);
     }
 
     protected function medical(): Attribute
@@ -178,18 +190,20 @@ class PatientRequest extends Model
     protected function hasMedicalOpinion(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->opinions()->whereHas('professional', function ($q) {
-                $q->where('type','Médico');
-            })->exists()
+            get: fn () => $this->opinions()
+                ->whereHas('professional', function ($query) {
+                    $query->whereHas('types', function ($typeQuery) {
+                        $typeQuery->where('type', 'Médico');
+                    });
+                })
+                ->exists()
         );
     }
 
     protected function medicalApprovedOpinion(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->opinions()->where('is_approved',true)->whereHas('professional', function ($q) {
-                $q->where('type','Médico');
-            })->first()
+            get: fn () => $this->opinions()->where('is_approved',true)->whereHas('professional')->first()
         );
     }
 
@@ -210,18 +224,20 @@ class PatientRequest extends Model
     protected function hasSocialOpinion(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->opinions()->whereHas('professional', function ($q) {
-                $q->where('type','Assistente Social');
-            })->exists()
+            get: fn () => $this->opinions()
+                ->whereHas('professional', function ($query) {
+                    $query->whereHas('types', function ($typeQuery) {
+                        $typeQuery->where('type', 'Assistente Social');
+                    });
+                })
+                ->exists()
         );
     }
 
     protected function socialApprovedOpinion(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->opinions()->where('is_approved',true)->whereHas('professional', function ($q) {
-                $q->where('type','Assistente Social');
-            })->first()
+            get: fn () => $this->opinions()->where('is_approved',true)->whereHas('professional')->first()
         );
     }
 
@@ -307,6 +323,45 @@ class PatientRequest extends Model
         return Attribute::make(
             get: fn () => $this->accountabilities()->exists() && ($this->accountabilities->contains('status', false) ? false : true)
         );
+    }
+
+    protected function processed(): Attribute
+    {
+        if ($this->type == 'Entrada') {
+            if ($this->medical_professional_id && $this->social_professional_id)
+                return Attribute::make(get: fn () => true);
+            return Attribute::make(get: fn () => false);
+        } else {
+            if ($this->medical_professional_id && $this->social_professional_id && $this->travel_professional_id && $this->cost_assistance_professional_id)
+                return Attribute::make(get: fn () => true);
+            return Attribute::make(get: fn () => false);
+        }
+    }
+
+    protected function working(): Attribute
+    {
+        if ($this->type == 'Entrada') {
+            if ($this->has_medical_opinion || $this->has_social_opinion)
+                return Attribute::make(get: fn () => true);
+            return Attribute::make(get: fn () => false);
+        } else {
+            if ($this->has_medical_opinion || $this->has_social_opinion || $this->has_travel || $this->has_cost_assistance)
+                return Attribute::make(get: fn () => true);
+            return Attribute::make(get: fn () => false);
+        }
+    }
+
+    protected function anyBookmarking(): Attribute
+    {
+        if ($this->type == 'Entrada') {
+            if ($this->is_medical_bookmark || $this->is_social_bookmark)
+                return Attribute::make(get: fn () => true);
+            return Attribute::make(get: fn () => false);
+        } else {
+            if ($this->is_medical_bookmark || $this->is_social_bookmark || $this->is_travel_bookmark || $this->is_cost_assistance_bookmark)
+                return Attribute::make(get: fn () => true);
+            return Attribute::make(get: fn () => false);
+        }
     }
 
 }

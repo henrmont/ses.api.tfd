@@ -35,7 +35,41 @@ class PatientRequestController extends Controller
 
         $patientRequests = PatientRequest::query()
             ->notPatientBack()
-            ->where('is_opinion_archived', false)
+            ->where('is_owner_archived', false)
+            ->with([
+                'report.patientCare.patient',
+                'report.patientCare.user.professional',
+                'report.cid',
+                'report.attachments',
+                'attachments',
+                'hospitalUnity',
+                'medicalProfessional',
+                'ownerProfessional',
+                'socialProfessional',
+                'travelProfessional',
+                'costAssistanceProfessional',
+                'accountabilityProfessional',
+                'travels.passengers.patient',
+                'travels.passengers.escort',
+                'costAssistances.costAssistanceDailies.dailyCost',
+                'accountabilities.accountabilityDailies.dailyCost'
+            ])
+            ->latest('id')
+            ->get();
+
+        return response()->json($patientRequests, JsonResponse::HTTP_OK);
+    }
+
+    /**
+     * Listar solicitações ativas do TFD.
+     */
+    public function getArchivePatientRequests(): JsonResponse
+    {
+        $this->authorize('tfd/solicitação listar');
+
+        $patientRequests = PatientRequest::query()
+            ->notPatientBack()
+            ->where('is_owner_archived', true)
             ->with([
                 'report.patientCare.patient',
                 'report.patientCare.user.professional',
@@ -101,13 +135,23 @@ class PatientRequestController extends Controller
     }
 
     /**
-     * Encaminhar/processar solicitação para o regulador médico.
+     * Arquivar a solicitação de passagem.
      */
-    public function processPatientRequestToMedical(PatientRequest $patient_request, Request $request)
+    public function archivePatientRequest(PatientRequest $patient_request)
     {
         $this->authorize('tfd/solicitação atualizar');
 
-        return $this->patientRequestService->processPatientRequestToMedical($patient_request, $request);
+        return $this->patientRequestService->archivePatientRequest($patient_request);
+    }
+
+    /**
+     * Encaminhar/processar solicitação para o regulador médico.
+     */
+    public function processPatientRequest(PatientRequest $patient_request, Request $request)
+    {
+        $this->authorize('tfd/solicitação atualizar');
+
+        return $this->patientRequestService->processPatientRequest($patient_request, $request);
     }
 
     /**
@@ -128,6 +172,16 @@ class PatientRequestController extends Controller
         $this->authorize('tfd/solicitação atualizar');
 
         return $this->patientRequestService->movePatientRequestFromOthers($patient_request);
+    }
+
+    /**
+     * Movimentar solicitação a partir do setor "Outros".
+     */
+    public function movePatientRequestFromArchive(PatientRequest $patient_request)
+    {
+        $this->authorize('tfd/solicitação atualizar');
+
+        return $this->patientRequestService->movePatientRequestFromArchive($patient_request);
     }
 
     /**
@@ -242,18 +296,43 @@ class PatientRequestController extends Controller
     }
 
     /**
-     * Listar profissionais médicos e totalizador de solicitações reguladas.
+     * Listar profissionais agrupados por tipo com totalizador de solicitações reguladas.
      */
-    public function getMedicalProfessionals(): JsonResponse
+    public function getProfessionals(): JsonResponse
     {
         $this->authorize('tfd/solicitação listar');
 
-        $medicalProfessionals = Professional::query()
-            ->with('user')
-            ->withCount('patientMedicalRequests')
-            ->where('type', 'Médico')
+        // 1. Consulta base com relacionamentos padrão
+        $baseQuery = fn () => Professional::query()
+            ->with('user');
+
+        // 2. Consultas separadas por tipo
+        $medicalProfessionals = $baseQuery()
+            ->withCount('patientMedicalRequests as requests_count')
+            ->whereHas('types', fn ($q) => $q->where('type', 'Médico'))
             ->get();
 
-        return response()->json($medicalProfessionals, JsonResponse::HTTP_OK);
+        $socialProfessionals = $baseQuery()
+            ->withCount('patientSocialRequests as requests_count')
+            ->whereHas('types', fn ($q) => $q->where('type', 'Assistente Social'))
+            ->get();
+
+        $travelProfessionals = $baseQuery()
+            ->withCount('patientTravelRequests as requests_count')
+            ->whereHas('types', fn ($q) => $q->where('type', 'Passagem'))
+            ->get();
+
+        $costAssistanceProfessionals = $baseQuery()
+            ->withCount('patientCostAssistanceRequests as requests_count')
+            ->whereHas('types', fn ($q) => $q->where('type', 'Ajuda de Custo'))
+            ->get();
+
+        // 3. Monta o array final com as coleções separadas
+        return response()->json([
+            'medical_professionals'         => $medicalProfessionals,
+            'social_professionals'          => $socialProfessionals,
+            'travel_professionals'          => $travelProfessionals,
+            'cost_assistance_professionals' => $costAssistanceProfessionals,
+        ], JsonResponse::HTTP_OK);
     }
 }

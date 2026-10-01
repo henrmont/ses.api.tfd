@@ -61,6 +61,7 @@ class PatientCare extends Model
     protected $appends = [
         'status',
         'owner',
+        'has_reports'
     ];
 
     // Accessors & Mutators
@@ -78,7 +79,7 @@ class PatientCare extends Model
             is_null($this->patient->file_cns_id) ||
             is_null($this->patient->file_document_id) ||
             is_null($this->patient->file_address_id) ||
-            is_null($this->patient->patientInfo->file_protocol_id)
+            is_null($this->patient->patientInfo->file_sigadoc_id)
         ) 
             return Attribute::make(get: fn () => false);
         return Attribute::make(get: fn () => true);
@@ -90,5 +91,11 @@ class PatientCare extends Model
             get: fn () => $this->user_id == auth()->user()->id ? true : false
         );
     }
-    
+
+    protected function hasReports(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->reports()->exists()
+        );
+    }
 }

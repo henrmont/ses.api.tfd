@@ -29,6 +29,8 @@ return new class extends Migration
             $table->string('back_to_social')->nullable();
             $table->string('back_to_travel')->nullable();
             $table->string('back_to_cost_assistance')->nullable();
+            $table->foreignId('back_from_medical')->nullable();
+            $table->foreignId('back_from_social')->nullable();
             $table->foreignId('back_from_travel')->nullable();
             $table->foreignId('back_from_cost_assistance')->nullable();
             $table->boolean('is_owner_bookmark')->default(false);
@@ -37,7 +39,9 @@ return new class extends Migration
             $table->boolean('is_travel_bookmark')->default(false);
             $table->boolean('is_cost_assistance_bookmark')->default(false);
             $table->boolean('is_accountability_bookmark')->default(false);
-            $table->boolean('is_opinion_archived')->default(false);
+            $table->boolean('is_owner_archived')->default(false);
+            $table->boolean('is_medical_archived')->default(false);
+            $table->boolean('is_social_archived')->default(false);
             $table->boolean('is_travel_archived')->default(false);
             $table->boolean('is_cost_assistance_archived')->default(false);
             $table->boolean('is_accountability_archived')->default(false);

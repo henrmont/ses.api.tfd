@@ -167,7 +167,7 @@ class OpinionService
     /**
      * Alternar marcação de sobrestado/paralisação (Médico ou Social).
      */
-    public function haltedPatientRequest(PatientRequest $patient_request, string $type): JsonResponse
+    public function haltedPatientRequest(string $type, PatientRequest $patient_request): JsonResponse
     {
         try {
             $this->tfd()->beginTransaction();
@@ -237,15 +237,15 @@ class OpinionService
 
             if ($type === 'medical') {
                 $patient_request->update([
+                    'is_medical_archived' => false,
                     'back_to_medical' => 'Retirou do arquivo',
                 ]);
             } else {
                 $patient_request->update([
+                    'is_social_archived' => false,
                     'back_to_social' => 'Retirou do arquivo',
                 ]);
             }
-
-            $patient_request->update(['is_opinion_archived' => false]);
 
             $this->tfd()->commit();
 
@@ -336,10 +336,13 @@ class OpinionService
     /**
      * Arquivar parecer da solicitação.
      */
-    public function archivePatientRequest(PatientRequest $patient_request): JsonResponse
+    public function archivePatientRequest(string $type, PatientRequest $patient_request): JsonResponse
     {
         try {
-            $patient_request->update(['is_opinion_archived' => true]);
+            if ($type === 'medical')
+                $patient_request->update(['is_medical_archived' => true]);
+            else
+                $patient_request->update(['is_social_archived' => true]);
 
             return response()->json(['message' => 'Solicitação arquivada com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {

@@ -99,6 +99,28 @@ class PatientRequestService
     }
 
     /**
+     * Alternar marcação de sobrestado/paralisação da solicitação.
+     */
+    public function archivePatientRequest(PatientRequest $patient_request): JsonResponse
+    {
+        try {
+            $this->tfd()->beginTransaction();
+
+            $patient_request->update(['is_owner_archived' => true]);
+
+            $this->tfd()->commit();
+
+            return response()->json(['message' => 'Solicitação arquivada com sucesso.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->tfd()->rollBack();
+
+            Log::error('Erro ao arquivar viagem da solicitação: ' . $e->getMessage());
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
      * Atualizar dados da solicitação.
      */
     public function updatePatientRequest(PatientRequest $patient_request, Request $request): JsonResponse
@@ -244,13 +266,16 @@ class PatientRequestService
     /**
      * Encaminhar solicitação para apreciação do médico regulador.
      */
-    public function processPatientRequestToMedical(PatientRequest $patient_request, Request $request): JsonResponse
+    public function processPatientRequest(PatientRequest $patient_request, Request $request): JsonResponse
     {
         try {
             $this->tfd()->beginTransaction();
 
             $patient_request->update([
                 'medical_professional_id' => $request->medical_professional_id,
+                'social_professional_id' => $request->social_professional_id,
+                'travel_professional_id' => $request->travel_professional_id,
+                'cost_assistance_professional_id' => $request->cost_assistance_professional_id,
             ]);
 
             $patient_request->report()->update(['is_editable' => false]);
@@ -333,7 +358,7 @@ class PatientRequestService
 
             $patient_request->update([
                 'owner_professional_id' => $userProfessional?->id,
-                'is_archived' => false
+                'is_owner_archived' => false
             ]);
 
             $this->tfd()->commit();
@@ -448,6 +473,14 @@ class PatientRequestService
 
             $patient_request->update(['back_to_owner' => null]);
 
+            if ($patient_request->back_from_medical == $userProfessionalId) {
+                $patient_request->update(['back_from_medical' => null]);
+            }
+
+            if ($patient_request->back_from_social == $userProfessionalId) {
+                $patient_request->update(['back_from_social' => null]);
+            }
+
             if ($patient_request->back_from_travel == $userProfessionalId) {
                 $patient_request->update(['back_from_travel' => null]);
             }
@@ -521,6 +554,12 @@ class PatientRequestService
         }
 
         switch ($way) {
+            case 'medical':
+                $patient_request->update(['back_from_medical' => $professionalId]);
+                break;
+            case 'social':
+                $patient_request->update(['back_from_social' => $professionalId]);
+                break;
             case 'travel':
                 $patient_request->update(['back_from_travel' => $professionalId]);
                 break;

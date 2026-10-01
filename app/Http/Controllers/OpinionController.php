@@ -30,21 +30,21 @@ class OpinionController extends Controller
     /**
      * Listar solicitações pendentes de parecer/tramitação.
      */
-    public function getPatientRequests(): JsonResponse
+    public function getPatientRequests(string $type): JsonResponse
     {
         $this->authorize('tfd/parecer listar');
 
         $userProfessionalId = Professional::where('user_id', auth()->id())->value('id');
 
         $patientRequests = PatientRequest::query()
-            ->notPatientBack()
-            ->where(function ($query) use ($userProfessionalId) {
-                $query->whereNull('back_to_owner')
-                    ->orWhere('back_from_cost_assistance', $userProfessionalId)
-                    ->orWhere('back_from_travel', $userProfessionalId);
-            })
-            ->where('is_opinion_archived', false)
-            ->with([
+            ->notPatientBack();
+
+        if ($type == 'medical')
+            $patientRequests = $patientRequests->where('is_medical_archived', false)->whereNull('back_from_medical');
+        else
+            $patientRequests = $patientRequests->where('is_social_archived', false)->whereNull('back_from_social');
+
+        $patientRequests = $patientRequests->with([
                 'report.patientCare.patient',
                 'report.patientCare.user.professional',
                 'report.cid',
@@ -71,15 +71,20 @@ class OpinionController extends Controller
     /**
      * Listar solicitações arquivadas na aba de pareceres.
      */
-    public function getArchivePatientRequests(): JsonResponse
+    public function getArchivePatientRequests(string $type): JsonResponse
     {
         $this->authorize('tfd/parecer listar');
 
         $patientRequests = PatientRequest::query()
             ->notPatientBack()
-            ->whereNull('back_to_owner')
-            ->where('is_opinion_archived', true)
-            ->with([
+            ->whereNull('back_to_owner');
+
+        if ($type == 'medical')
+            $patientRequests = $patientRequests->where('is_medical_archived', true);
+        else
+            $patientRequests = $patientRequests->where('is_social_archived', true);
+
+        $patientRequests = $patientRequests->with([
                 'report.patientCare.patient',
                 'report.patientCare.user.professional',
                 'report.cid',
@@ -222,11 +227,11 @@ class OpinionController extends Controller
     /**
      * Devolver/restaurar fluxo de solicitação.
      */
-    public function undoPatientRequest(PatientRequest $patient_request, Request $request)
+    public function undoPatientRequest(PatientRequest $patient_request, string $type, Request $request)
     {
         $this->authorize('tfd/parecer atualizar');
 
-        return $this->patientRequestService->undoPatientRequest($patient_request, $request);
+        return $this->patientRequestService->undoPatientRequest($patient_request, $request, $type);
     }
 
     /**
@@ -248,21 +253,21 @@ class OpinionController extends Controller
     /**
      * Arquivar solicitação no módulo de pareceres.
      */
-    public function archivePatientRequest(PatientRequest $patient_request)
+    public function archivePatientRequest(string $type, PatientRequest $patient_request)
     {
         $this->authorize('tfd/parecer atualizar');
 
-        return $this->opinionService->archivePatientRequest($patient_request);
+        return $this->opinionService->archivePatientRequest($type, $patient_request);
     }
 
     /**
      * Sobrestar/paralisar a solicitação no fluxo do parecer.
      */
-    public function haltedPatientRequest(PatientRequest $patient_request, string $type)
+    public function haltedPatientRequest(string $type, PatientRequest $patient_request)
     {
         $this->authorize('tfd/parecer atualizar');
 
-        return $this->opinionService->haltedPatientRequest($patient_request, $type);
+        return $this->opinionService->haltedPatientRequest($type, $patient_request);
     }
 
     /**
