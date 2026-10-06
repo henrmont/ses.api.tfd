@@ -235,15 +235,19 @@ class OpinionService
         try {
             $this->tfd()->beginTransaction();
 
+            $professionalId = Professional::where('user_id', auth()->id())->value('id');
+
             if ($type === 'medical') {
                 $patient_request->update([
                     'is_medical_archived' => false,
                     'back_to_medical' => 'Retirou do arquivo',
+                    'medical_professional_id' => $professionalId,
                 ]);
             } else {
                 $patient_request->update([
                     'is_social_archived' => false,
                     'back_to_social' => 'Retirou do arquivo',
+                    'social_professional_id' => $professionalId,
                 ]);
             }
 

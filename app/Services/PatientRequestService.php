@@ -358,7 +358,8 @@ class PatientRequestService
 
             $patient_request->update([
                 'owner_professional_id' => $userProfessional?->id,
-                'is_owner_archived' => false
+                'is_owner_archived' => false,
+                'back_to_owner' => 'Retirou do arquivo.',
             ]);
 
             $this->tfd()->commit();
@@ -391,10 +392,6 @@ class PatientRequestService
                             'back_to_user' => $patientCare->back_to_user . '; ' . $request->reason,
                             'is_archived' => false
                         ]);
-                    }
-
-                    if ($way) {
-                        $this->changeWay($patient_request, $patient_request->owner_professional_id, $way);
                     }
                     break;
 
