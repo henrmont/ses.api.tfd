@@ -67,9 +67,12 @@ class TravelService
         try {
             $this->tfd()->beginTransaction();
 
+            $professionalId = Professional::where('user_id', auth()->id())->value('id');
+
             $patient_request->update([
                 'back_to_travel' => 'Retirou do arquivo',
                 'is_travel_archived' => false,
+                'travel_professional_id' => $professionalId,
             ]);
 
             $this->tfd()->commit();

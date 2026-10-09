@@ -163,14 +163,15 @@ class PatientRequest extends Model
 
     protected function ownerStatus(): Attribute
     {
-        if (
-            ($this->medical && $this->medical_status) ||
-            ($this->social && $this->social_status) ||
-            ($this->travel && $this->travel_status) ||
-            ($this->cost_assistance && $this->cost_assistance_status)
-        ) 
-            return Attribute::make(get: fn () => true);
-        return Attribute::make(get: fn () => false);
+        if ($this->type === 'Entrada') {
+            if ( $this->medical_status && $this->social_status) 
+                return Attribute::make(get: fn () => true);
+            return Attribute::make(get: fn () => false);
+        } else {
+            if ($this->medical_status && $this->social_status && $this->travel_status && $this->cost_assistance_status)
+                return Attribute::make(get: fn () => true);
+            return Attribute::make(get: fn () => false);
+        }
     }
 
     protected function medical(): Attribute

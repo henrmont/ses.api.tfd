@@ -213,6 +213,9 @@ class TravelController extends Controller
             ->with([
                 'patientRequest.report.patientCare.patient',
                 'patientRequest.report.patientCare.escorts',
+                'passengers.patient',
+                'passengers.escort',
+                'travelRoutes',
             ])
             ->latest('id')
             ->get();
