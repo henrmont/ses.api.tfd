@@ -173,13 +173,21 @@ class CostAssistanceService
 
             $patient_request->update(['back_to_cost_assistance' => null]);
 
-            $professionalId = Professional::where('user_id', auth()->id())->value('id');
+            $userProfessionalId = Professional::where('user_id', auth()->id())->value('id');
 
-            if ($patient_request->back_from_travel == $professionalId) {
+            if ($patient_request->back_from_medical == $userProfessionalId) {
+                $patient_request->update(['back_from_medical' => null]);
+            }
+
+            if ($patient_request->back_from_social == $userProfessionalId) {
+                $patient_request->update(['back_from_social' => null]);
+            }
+
+            if ($patient_request->back_from_travel == $userProfessionalId) {
                 $patient_request->update(['back_from_travel' => null]);
             }
 
-            if ($patient_request->back_from_cost_assistance == $professionalId) {
+            if ($patient_request->back_from_cost_assistance == $userProfessionalId) {
                 $patient_request->update(['back_from_cost_assistance' => null]);
             }
 

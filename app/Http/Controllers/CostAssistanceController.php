@@ -272,6 +272,7 @@ class CostAssistanceController extends Controller
                 'patientRequest.travels.passengers.patient',
                 'passenger.patient',
                 'passenger.escort',
+                'payment',
             ])
             ->oldest('id')
             ->get();
@@ -388,11 +389,12 @@ class CostAssistanceController extends Controller
         $this->authorize('tfd/ajuda de custo listar');
 
         $paymentProfessionals = Professional::query()
-            ->with('user')
-            ->withCount('patientPaymentRequests')
-            ->where('type', 'Pagamento')
+            ->withCount('patientPaymentRequests as requests_count')
+            ->whereHas('types', fn ($q) => $q->where('type', 'Pagamento'))
             ->get();
 
-        return response()->json($paymentProfessionals, JsonResponse::HTTP_OK);
+        return response()->json([
+            'payment_professionals'         => $paymentProfessionals
+        ], JsonResponse::HTTP_OK);
     }
 }

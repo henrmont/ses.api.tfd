@@ -146,7 +146,7 @@ class PatientRequest extends Model
         'has_initial_cost_assistance',
         'has_complementary_cost_assistance',
         'has_cost_assistance_without_dailies',
-        'has_cost_assistance_with_payment',
+        'has_cost_assistance_without_payment',
         'accountability',
         'accountability_status',
         'processed',
@@ -305,10 +305,10 @@ class PatientRequest extends Model
         );
     }
 
-    protected function hasCostAssistanceWithPayment(): Attribute
+    protected function hasCostAssistanceWithoutPayment(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->costAssistances()->whereHas('payment')->exists()
+            get: fn () => $this->costAssistances()->whereDoesntHave('payment')->exists()
         );
     }
 

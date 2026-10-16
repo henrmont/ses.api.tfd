@@ -397,7 +397,8 @@ class PatientRequestService
 
                 case 'owner':
                     $patient_request->update([
-                        'back_to_owner' => $patient_request->back_to_owner . '; ' . $request->reason
+                        'back_to_owner' => $patient_request->back_to_owner . '; ' . $request->reason,
+                        'is_owner_archived' => false
                     ]);
 
                     if ($way) {
@@ -407,7 +408,8 @@ class PatientRequestService
 
                 case 'medical':
                     $patient_request->update([
-                        'back_to_medical' => $patient_request->back_to_medical . '; ' . $request->reason
+                        'back_to_medical' => $patient_request->back_to_medical . '; ' . $request->reason,
+                        'is_medical_archived' => false
                     ]);
 
                     if ($way) {
@@ -417,7 +419,8 @@ class PatientRequestService
 
                 case 'social':
                     $patient_request->update([
-                        'back_to_social' => $patient_request->back_to_social . '; ' . $request->reason
+                        'back_to_social' => $patient_request->back_to_social . '; ' . $request->reason,
+                        'is_social_archived' => false
                     ]);
 
                     if ($way) {
@@ -427,7 +430,8 @@ class PatientRequestService
 
                 case 'travel':
                     $patient_request->update([
-                        'back_to_travel' => $patient_request->back_to_travel . '; ' . $request->reason
+                        'back_to_travel' => $patient_request->back_to_travel . '; ' . $request->reason,
+                        'is_travel_archived' => false
                     ]);
 
                     if ($way) {
@@ -437,7 +441,8 @@ class PatientRequestService
 
                 case 'cost_assistance':
                     $patient_request->update([
-                        'back_to_cost_assistance' => $patient_request->back_to_cost_assistance . '; ' . $request->reason
+                        'back_to_cost_assistance' => $patient_request->back_to_cost_assistance . '; ' . $request->reason,
+                        'is_cost_assistance_archived' => false
                     ]);
 
                     if ($way) {
