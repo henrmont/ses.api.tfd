@@ -1,4 +1,4 @@
-FROM php:8.4-fpm
+FROM php:8.5.12-fpm
 
 # 1. Instala dependências do sistema, Nginx e Supervisor
 RUN apt-get update && apt-get install -y --no-install-recommends \
