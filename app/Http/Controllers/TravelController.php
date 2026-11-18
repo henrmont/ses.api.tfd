@@ -48,7 +48,7 @@ class TravelController extends Controller
                 $query->whereNull('back_to_social')->orWhereNull('back_from_travel');
             })
             ->where('is_travel_archived', false)
-            ->where('type', 'Agendamento')
+            ->whereIn('type', ['Agendamento','Ação Judicial'])
             ->with([
                 'report.patientCare.patient',
                 'report.patientCare.user.professional',
