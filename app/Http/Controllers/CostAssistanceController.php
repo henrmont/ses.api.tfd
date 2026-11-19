@@ -98,7 +98,7 @@ class CostAssistanceController extends Controller
                 $query->whereNull('back_to_social')->orWhereNull('back_from_cost_assistance');
             })
             ->where('is_cost_assistance_archived', true)
-            ->where('type', 'Agendamento')
+            ->whereIn('type', ['Agendamento','Ação Judicial'])
             ->with([
                 'report.patientCare.user.professional',   
                 'report.patientCare.patient',
@@ -132,7 +132,7 @@ class CostAssistanceController extends Controller
 
         $patientRequests = $report->patientRequests()
             ->whereNot('id', $patient_request->id)
-            ->where('type', 'Agendamento')
+            ->whereIn('type', ['Agendamento','Ação Judicial'])
             ->with([
                 'report.patientCare.patient',
                 'report.cid',

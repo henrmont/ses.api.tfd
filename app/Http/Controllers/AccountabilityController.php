@@ -94,7 +94,7 @@ class AccountabilityController extends Controller
                 $query->whereNull('back_to_social')->orWhereNull('back_from_cost_assistance');
             })
             ->where('is_accountability_archived', true)
-            ->where('type', 'Agendamento')
+            ->whereIn('type', ['Agendamento','Ação Judicial'])
             ->with([
                 'report.patientCare.patient',
                 'report.cid',
