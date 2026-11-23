@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Module;
 use App\Models\Professional;
 use App\Models\User;
-use App\Models\UserModule;
 use Exception;
 use Illuminate\Database\Connection;
 use Illuminate\Http\JsonResponse;
@@ -32,7 +31,7 @@ class UserService
     {
         return DB::connection('auth');
     }
-    
+
     protected ?Module $module;
 
     public function __construct()
@@ -57,14 +56,14 @@ class UserService
                 $userId = $this->auth()
                     ->table('users')
                     ->insertGetId([
-                        'email'      => $request->email,
-                        'name'       => $request->email,
-                        'password'   => Hash::make('12345678'),
-                        'module_id'  => $this->module?->id,
+                        'email'     => $request->email,
+                        'name'      => $request->email,
+                        'password'  => Hash::make('12345678'),
+                        'module_id' => $this->module?->id,
                     ]);
             } else {
                 $user->update([
-                    'is_valid' => true,
+                    'is_valid'  => true,
                     'module_id' => $this->module?->id,
                 ]);
             }
@@ -72,8 +71,8 @@ class UserService
             $this->auth()
                 ->table('user_modules')
                 ->insert([
-                    'user_id'    => $user ? $user->id : $userId,
-                    'module_id'  => $this->module?->id,
+                    'user_id'   => $user ? $user->id : $userId,
+                    'module_id' => $this->module?->id,
                 ]);
 
             // 2. Cria o registro do profissional no TFD
@@ -94,7 +93,7 @@ class UserService
             $this->tfd()->commit();
             $this->auth()->commit();
 
-            return response()->json(['message' => 'Usuário criado com sucesso.'], JsonResponse::HTTP_OK);
+            return response()->json(['message' => 'Usuário criado com sucesso.'], JsonResponse::HTTP_CREATED);
         } catch (Exception $e) {
             $this->tfd()->rollBack();
             $this->auth()->rollBack();
@@ -106,55 +105,54 @@ class UserService
     }
 
     /**
-     * Alternar trava de edição (is_editable) do usuário no módulo TFD.
+     * Atualização parcial RESTful (PATCH) para estados de trava (is_editable) e validação (is_valid).
      */
-    public function lockUser(User $user): JsonResponse
+    public function patchUser(User $user, array $data): JsonResponse
     {
         try {
+            $this->auth()->beginTransaction();
+
             $userModule = $user->userModule()
                 ->where('module_id', $this->module?->id)
                 ->firstOrFail();
 
-            $userModule->update([
-                'is_editable' => !$userModule->is_editable,
-            ]);
+            $messages = [];
 
-            $statusText = $userModule->is_editable ? 'destravado' : 'travado';
+            // 1. Atualização de trava de edição (is_editable)
+            if (array_key_exists('is_editable', $data)) {
+                $userModule->update([
+                    'is_editable' => (bool) $data['is_editable'],
+                ]);
 
-            return response()->json(['message' => "Usuário {$statusText} com sucesso."], JsonResponse::HTTP_OK);
-        } catch (Exception $e) {
-            Log::error('Erro ao travar/destravar usuário: ' . $e->getMessage());
-
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
-        }
-    }
-
-    /**
-     * Alternar validação de acesso (is_valid) do usuário no módulo TFD.
-     */
-    public function validateUser(User $user): JsonResponse
-    {
-        try {
-            $userModule = $user->userModule()
-                ->where('module_id', $this->module?->id)
-                ->firstOrFail();
-
-            $userModule->update([
-                'is_valid' => !$userModule->is_valid,
-            ]);
-
-            if (!$userModule->is_valid) {
-                $user->update(['module_id' => null]);
+                $statusText = $userModule->is_editable ? 'destravado' : 'travado';
+                $messages[] = "Usuário {$statusText} com sucesso.";
             }
 
-            $hasAnyValidModule = $user->userModule()->where('is_valid', true)->exists();
-            $user->update(['is_valid' => $hasAnyValidModule]);
+            // 2. Atualização de validação de acesso (is_valid)
+            if (array_key_exists('is_valid', $data)) {
+                $userModule->update([
+                    'is_valid' => (bool) $data['is_valid'],
+                ]);
 
-            $statusText = $userModule->is_valid ? 'validado' : 'invalidado';
+                if (!$userModule->is_valid && $user->module_id === $this->module?->id) {
+                    $user->update(['module_id' => null]);
+                }
 
-            return response()->json(['message' => "Usuário {$statusText} com sucesso."], JsonResponse::HTTP_OK);
+                $hasAnyValidModule = $user->userModule()->where('is_valid', true)->exists();
+                $user->update(['is_valid' => $hasAnyValidModule]);
+
+                $statusText = $userModule->is_valid ? 'validado' : 'invalidado';
+                $messages[] = "Usuário {$statusText} com sucesso.";
+            }
+
+            $this->auth()->commit();
+
+            return response()->json([
+                'message' => implode(' ', $messages) ?: 'Usuário atualizado com sucesso.',
+            ], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
-            Log::error('Erro ao validar usuário: ' . $e->getMessage());
+            $this->auth()->rollBack();
+            Log::error('Erro ao atualizar estado do usuário: ' . $e->getMessage());
 
             return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
@@ -176,10 +174,8 @@ class UserService
 
             // 2. Sincroniza as lotações (ProfessionalType)
             if ($request->has('types') && is_array($request->types)) {
-                // Remove os tipos antigos
                 $professional->types()->delete();
 
-                // Prepara e insere os novos tipos
                 $newTypes = array_map(function ($type) {
                     return ['type' => $type];
                 }, $request->types);
@@ -205,7 +201,8 @@ class UserService
     public function deleteUser(User $user): JsonResponse
     {
         try {
-            DB::beginTransaction();
+            $this->tfd()->beginTransaction();
+            $this->auth()->beginTransaction();
 
             $userModule = $user->userModule()
                 ->where('module_id', $this->module?->id)
@@ -225,11 +222,13 @@ class UserService
                 $user->update(['is_valid' => false]);
             }
 
-            DB::commit();
+            $this->tfd()->commit();
+            $this->auth()->commit();
 
             return response()->json(['message' => 'Usuário excluído com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
-            DB::rollBack();
+            $this->tfd()->rollBack();
+            $this->auth()->rollBack();
             Log::error('Erro ao excluir usuário: ' . $e->getMessage());
 
             return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
@@ -242,7 +241,11 @@ class UserService
     public function rolesUser(User $user, Request $request): JsonResponse
     {
         try {
-            $roles = Role::findMany($request->input('roles', []));
+            // Aceita tanto array direto [1, 2] ou objeto [{ id: 1 }] quanto { roles: [...] }
+            $rawRoles = $request->has('roles') ? $request->input('roles', []) : $request->all();
+            $roleIds = collect($rawRoles)->map(fn ($item) => is_array($item) ? ($item['id'] ?? null) : $item)->filter()->all();
+
+            $roles = Role::findMany($roleIds);
             $user->syncRoles($roles);
 
             return response()->json(['message' => 'Regras do usuário atualizadas com sucesso.'], JsonResponse::HTTP_OK);

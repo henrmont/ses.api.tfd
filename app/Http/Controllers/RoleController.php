@@ -6,7 +6,6 @@ use App\Services\RoleService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class RoleController extends Controller
@@ -20,15 +19,11 @@ class RoleController extends Controller
     /**
      * Listar todas as regras do módulo TFD.
      */
-    public function getRoles(): JsonResponse
+    public function index(): JsonResponse
     {
         $this->authorize('tfd/regra listar');
 
-        $roles = Role::query()
-            ->with('permissions')
-            ->where('name', 'LIKE', 'tfd%')
-            ->orderBy('id', 'desc')
-            ->get();
+        $roles = $this->roleService->getAllRoles();
 
         return response()->json($roles, JsonResponse::HTTP_OK);
     }
@@ -36,13 +31,11 @@ class RoleController extends Controller
     /**
      * Listar todas as permissões do módulo TFD.
      */
-    public function getPermissions(): JsonResponse
+    public function permissions(): JsonResponse
     {
         $this->authorize('tfd/regra listar');
 
-        $permissions = Permission::query()
-            ->where('name', 'LIKE', 'tfd%')
-            ->get();
+        $permissions = $this->roleService->getAllPermissions();
 
         return response()->json($permissions, JsonResponse::HTTP_OK);
     }
@@ -50,30 +43,57 @@ class RoleController extends Controller
     /**
      * Criar uma nova regra.
      */
-    public function createRole(Request $request): JsonResponse
+    public function store(Request $request): JsonResponse
     {
         $this->authorize('tfd/regra criar');
 
-        return $this->roleService->createRole($request);
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'permissions' => ['nullable', 'array'],
+            'permissions.*' => ['integer'],
+        ]);
+
+        $this->roleService->createRole($validated);
+
+        return response()->json(
+            ['message' => 'Regra criada com sucesso.'],
+            JsonResponse::HTTP_CREATED
+        );
     }
 
     /**
-     * Atualizar dados de uma regra.
+     * Atualizar dados e permissões de uma regra.
      */
-    public function updateRole(Role $role, Request $request): JsonResponse
+    public function update(Role $role, Request $request): JsonResponse
     {
         $this->authorize('tfd/regra atualizar');
 
-        return $this->roleService->updateRole($role, $request);
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'permissions' => ['nullable', 'array'],
+            'permissions.*' => ['integer'],
+        ]);
+
+        $this->roleService->updateRole($role, $validated);
+
+        return response()->json(
+            ['message' => 'Regra atualizada com sucesso.'],
+            JsonResponse::HTTP_OK
+        );
     }
 
     /**
      * Excluir uma regra.
      */
-    public function deleteRole(Role $role): JsonResponse
+    public function destroy(Role $role): JsonResponse
     {
         $this->authorize('tfd/regra deletar');
 
-        return $this->roleService->deleteRole($role);
+        $this->roleService->deleteRole($role);
+
+        return response()->json(
+            ['message' => 'Regra deletada com sucesso.'],
+            JsonResponse::HTTP_OK
+        );
     }
 }

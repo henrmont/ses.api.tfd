@@ -2,94 +2,125 @@
 
 namespace App\Services;
 
-use Exception;
+use DomainException;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class RoleService
 {
+    private const MODULE_PREFIX = 'tfd/';
+    private const DB_CONNECTION = 'auth';
+    private const DEFAULT_PERMISSIONS = [
+        'tfd/voltar',
+        'tfd/download',
+    ];
+
     /**
-     * Criar uma nova regra no sistema com suas permissões.
+     * Retorna todas as regras pertencentes ao módulo TFD.
      */
-    public function createRole(Request $request): JsonResponse
+    public function getAllRoles(): Collection
     {
-        try {
-            DB::beginTransaction();
-
-            $role = Role::on('auth')->create([
-                'name' => 'tfd/' . $request->name,
-            ]);
-
-            $selectedPermissions = Permission::findMany($request->permissions);
-            $defaultPermissions = $this->getDefaultPermissions();
-
-            $role->givePermissionTo($selectedPermissions->merge($defaultPermissions));
-
-            DB::commit();
-
-            return response()->json(['message' => 'Regra criada com sucesso.'], JsonResponse::HTTP_OK);
-        } catch (Exception $e) {
-            DB::rollBack();
-            Log::error('Erro ao criar regra: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
-        }
+        return Role::query()
+            ->with('permissions')
+            ->where('name', 'LIKE', self::MODULE_PREFIX . '%')
+            ->orderByDesc('id')
+            ->get();
     }
 
     /**
-     * Atualizar dados e permissões de uma regra existente.
+     * Retorna todas as permissões pertencentes ao módulo TFD.
      */
-    public function updateRole(Role $role, Request $request): JsonResponse
+    public function getAllPermissions(): Collection
     {
-        try {
-            DB::beginTransaction();
+        return Permission::query()
+            ->where('name', 'LIKE', self::MODULE_PREFIX . '%')
+            ->get();
+    }
 
+    /**
+     * Cria uma nova regra com suas permissões selecionadas e padrão.
+     */
+    public function createRole(array $data): Role
+    {
+        return DB::connection(self::DB_CONNECTION)->transaction(function () use ($data) {
+            $role = Role::on(self::DB_CONNECTION)->create([
+                'name' => $this->formatRoleName($data['name']),
+            ]);
+
+            $permissions = $this->resolvePermissions($data['permissions'] ?? []);
+            $role->givePermissionTo($permissions);
+
+            return $role;
+        });
+    }
+
+    /**
+     * Atualiza o nome e sincroniza as permissões de uma regra existente.
+     */
+    public function updateRole(Role $role, array $data): Role
+    {
+        $this->ensureBelongsToModule($role);
+
+        return DB::connection(self::DB_CONNECTION)->transaction(function () use ($role, $data) {
             $role->update([
-                'name' => 'tfd/' . $request->name,
+                'name' => $this->formatRoleName($data['name']),
             ]);
 
-            $selectedPermissions = Permission::findMany($request->permissions);
-            $defaultPermissions = $this->getDefaultPermissions();
+            $permissions = $this->resolvePermissions($data['permissions'] ?? []);
+            $role->syncPermissions($permissions);
 
-            $role->syncPermissions($selectedPermissions->merge($defaultPermissions));
-
-            DB::commit();
-
-            return response()->json(['message' => 'Regra atualizada com sucesso.'], JsonResponse::HTTP_OK);
-        } catch (Exception $e) {
-            DB::rollBack();
-            Log::error('Erro ao atualizar regra: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
-
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
-        }
+            return $role;
+        });
     }
 
     /**
-     * Excluir uma regra do sistema.
+     * Remove uma regra do sistema.
      */
-    public function deleteRole(Role $role): JsonResponse
+    public function deleteRole(Role $role): void
     {
-        try {
+        $this->ensureBelongsToModule($role);
+
+        DB::connection(self::DB_CONNECTION)->transaction(function () use ($role) {
             $role->delete();
+        });
+    }
 
-            return response()->json(['message' => 'Regra deletada com sucesso.'], JsonResponse::HTTP_OK);
-        } catch (Exception $e) {
-            Log::error('Erro ao excluir regra: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+    /**
+     * Garante que o nome da regra tenha exatamente um prefixo do módulo.
+     */
+    private function formatRoleName(string $name): string
+    {
+        $cleanName = preg_replace('/^' . preg_quote(self::MODULE_PREFIX, '/') . '/i', '', trim($name));
 
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        return self::MODULE_PREFIX . $cleanName;
+    }
+
+    /**
+     * Impede alteração/exclusão de regras que não pertencem ao módulo TFD.
+     */
+    private function ensureBelongsToModule(Role $role): void
+    {
+        if (!str_starts_with($role->name, self::MODULE_PREFIX)) {
+            throw new DomainException('A regra informada não pertence ao módulo TFD.');
         }
     }
 
     /**
-     * Retorna as permissões padrão obrigatórias do módulo TFD.
+     * Mescla as permissões selecionadas (restritas ao módulo) com as permissões padrão.
      */
-    private function getDefaultPermissions(): Collection
+    private function resolvePermissions(array $permissionIds): Collection
     {
-        return Permission::whereIn('name', ['tfd/voltar', 'tfd/download'])->get();
+        $selectedPermissions = Permission::query()
+            ->where('name', 'LIKE', self::MODULE_PREFIX . '%')
+            ->whereIn('id', $permissionIds)
+            ->get();
+
+        $defaultPermissions = Permission::query()
+            ->whereIn('name', self::DEFAULT_PERMISSIONS)
+            ->get();
+
+        return $selectedPermissions->merge($defaultPermissions);
     }
 }

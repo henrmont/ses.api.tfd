@@ -21,39 +21,35 @@ Route::middleware(['api', Auth::class])
     ->name('users.')
     ->controller(UserController::class)
     ->group(function () {
-        Route::get('/me', 'getMe')->name('me');
-        // Listagem
+        // Recurso do usuário autenticado e consultas
+        Route::get('me', 'getMe')->name('me');
         Route::get('/', 'getUsers')->name('index');
         Route::get('roles', 'getRoles')->name('roles.index');
+        Route::get('availability', 'checkAvailability')->name('availability');
 
-        // CRUD principal
+        // CRUD principal e atualização parcial (lock, validate, etc.)
         Route::post('/', 'createUser')->name('store');
         Route::put('{user}', 'updateUser')->name('update');
+        Route::patch('{user}', 'patchUser')->name('patch');
         Route::delete('{user}', 'deleteUser')->name('destroy');
 
-        // Ações de estado e relacionamentos
-        Route::patch('{user}/lock', 'lockUser')->name('lock');
-        Route::patch('{user}/validate', 'validateUser')->name('validate');
-        Route::patch('{user}/roles', 'rolesUser')->name('roles.update');
-
-        // Validações assíncronas (se declaradas no Controller)
-        Route::get('exists-email/{email}/{currentEmail?}', 'emailUserExists')->name('exists.email');
-        Route::get('exists-cns/{cns}/{currentCns?}', 'cnsUserExists')->name('exists.cns');
+        // Sub-recurso de relacionamentos
+        Route::put('{user}/roles', 'rolesUser')->name('roles.update');
     });
 
 Route::middleware(['api', Auth::class])
     ->prefix('tfd/roles')
-    ->name('roles.')
+    ->name('tfd.roles.')
     ->controller(RoleController::class)
     ->group(function () {
         // Listagens
-        Route::get('/', 'getRoles')->name('index');
-        Route::get('permissions', 'getPermissions')->name('permissions.index');
+        Route::get('/', 'index')->name('index');
+        Route::get('permissions', 'permissions')->name('permissions.index');
 
         // CRUD principal
-        Route::post('/', 'createRole')->name('store');
-        Route::put('{role}', 'updateRole')->name('update');
-        Route::delete('{role}', 'deleteRole')->name('destroy');
+        Route::post('/', 'store')->name('store');
+        Route::put('{role}', 'update')->name('update');
+        Route::delete('{role}', 'destroy')->name('destroy');
     });
 
 Route::middleware(['api', Auth::class])

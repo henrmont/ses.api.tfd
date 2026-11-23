@@ -18,6 +18,9 @@ class UserController extends Controller
         protected UserService $userService
     ) {}
 
+    /**
+     * Retorna o usuário autenticado com seus relacionamentos.
+     */
     public function getMe(): JsonResponse
     {
         $me = User::with('roles.permissions', 'professional.types')->find(auth()->id());
@@ -60,7 +63,7 @@ class UserController extends Controller
     /**
      * Criar um novo usuário.
      */
-    public function createUser(Request $request)
+    public function createUser(Request $request): JsonResponse
     {
         $this->authorize('tfd/usuário criar');
 
@@ -68,29 +71,9 @@ class UserController extends Controller
     }
 
     /**
-     * Travar/Destravar edição de um usuário.
+     * Atualizar dados completos de um usuário (PUT).
      */
-    public function lockUser(User $user)
-    {
-        $this->authorize('tfd/usuário travar');
-
-        return $this->userService->lockUser($user);
-    }
-
-    /**
-     * Validar/Invalidar status de um usuário.
-     */
-    public function validateUser(User $user)
-    {
-        $this->authorize('tfd/usuário validar');
-
-        return $this->userService->validateUser($user);
-    }
-
-    /**
-     * Atualizar dados de um usuário.
-     */
-    public function updateUser(User $user, Request $request)
+    public function updateUser(User $user, Request $request): JsonResponse
     {
         $this->authorize('tfd/usuário atualizar');
 
@@ -98,9 +81,30 @@ class UserController extends Controller
     }
 
     /**
+     * Atualizar parcialmente estados do usuário no módulo (PATCH: is_editable, is_valid).
+     */
+    public function patchUser(User $user, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'is_editable' => ['sometimes', 'boolean'],
+            'is_valid'    => ['sometimes', 'boolean'],
+        ]);
+
+        if (array_key_exists('is_editable', $validated)) {
+            $this->authorize('tfd/usuário travar');
+        }
+
+        if (array_key_exists('is_valid', $validated)) {
+            $this->authorize('tfd/usuário validar');
+        }
+
+        return $this->userService->patchUser($user, $validated);
+    }
+
+    /**
      * Excluir um usuário.
      */
-    public function deleteUser(User $user)
+    public function deleteUser(User $user): JsonResponse
     {
         $this->authorize('tfd/usuário deletar');
 
@@ -108,9 +112,9 @@ class UserController extends Controller
     }
 
     /**
-     * Atualizar as regras/permissões atribuídas ao usuário.
+     * Sincronizar as regras/permissões atribuídas ao usuário (PUT /users/{user}/roles).
      */
-    public function rolesUser(User $user, Request $request)
+    public function rolesUser(User $user, Request $request): JsonResponse
     {
         $this->authorize('tfd/usuário atualizar');
 
@@ -119,38 +123,54 @@ class UserController extends Controller
 
     /*
     |--------------------------------------------------------------------------
-    | Validadores Assíncronos (Existência de Registros)
+    | Validadores Assíncronos (Disponibilidade de Registros via Query Params)
     |--------------------------------------------------------------------------
     */
 
     /**
-     * Verifica se o e-mail informado já existe no banco.
+     * Verifica disponibilidade de e-mail ou CNS via query string.
+     * GET /tfd/users/availability?email=...&ignore=...
+     * GET /tfd/users/availability?cns=...&ignore=...
      */
-    public function emailUserExists(string $email, ?string $currentEmail = null): JsonResponse
+    public function checkAvailability(Request $request): JsonResponse
     {
         $this->authorize('tfd/usuário listar');
 
-        $exists = User::query()
-            ->tfd()
-            ->where('email', $email)
-            ->when($currentEmail, fn ($query) => $query->where('email', '!=', $currentEmail))
-            ->exists();
+        $ignore = $request->query('ignore');
 
-        return response()->json($exists, JsonResponse::HTTP_OK);
-    }
+        if ($request->filled('email')) {
+            $email = strtolower(trim($request->query('email')));
+            $cleanIgnore = $ignore ? strtolower(trim($ignore)) : null;
 
-    /**
-     * Verifica se o CNS informado já existe no banco.
-     */
-    public function cnsUserExists(string $cns, ?string $currentCns = null): JsonResponse
-    {
-        $this->authorize('tfd/usuário listar');
+            $exists = User::query()
+                ->tfd()
+                ->where('email', $email)
+                ->when($cleanIgnore, fn ($query) => $query->where('email', '!=', $cleanIgnore))
+                ->exists();
 
-        $exists = Professional::query()
-            ->where('cns', $cns)
-            ->when($currentCns, fn ($query) => $query->where('cns', '!=', $currentCns))
-            ->exists();
+            return response()->json([
+                'available' => !$exists,
+                'exists'    => $exists,
+            ], JsonResponse::HTTP_OK);
+        }
 
-        return response()->json($exists, JsonResponse::HTTP_OK);
+        if ($request->filled('cns')) {
+            $cns = preg_replace('/\D/', '', $request->query('cns'));
+            $cleanIgnore = $ignore ? preg_replace('/\D/', '', $ignore) : null;
+
+            $exists = Professional::query()
+                ->where('cns', $cns)
+                ->when($cleanIgnore, fn ($query) => $query->where('cns', '!=', $cleanIgnore))
+                ->exists();
+
+            return response()->json([
+                'available' => !$exists,
+                'exists'    => $exists,
+            ], JsonResponse::HTTP_OK);
+        }
+
+        return response()->json([
+            'message' => 'Informe o parâmetro email ou cns para verificação.',
+        ], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
     }
 }
