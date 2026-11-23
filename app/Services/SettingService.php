@@ -7,6 +7,7 @@ use App\Models\DailyCost;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class SettingService
@@ -16,14 +17,27 @@ class SettingService
      */
     public function updateDailyCost(DailyCost $daily_cost, Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'value' => ['required', 'numeric', 'min:0.01'],
+        ]);
+
         try {
-            $daily_cost->update($request->only(['value']));
+            $daily_cost->update([
+                'value' => $validated['value'],
+            ]);
 
-            return response()->json(['message' => 'Diária atualizada com sucesso.'], JsonResponse::HTTP_OK);
+            return response()->json([
+                'message' => 'Diária atualizada com sucesso.',
+            ], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
-            Log::error('Erro ao atualizar custo de diária: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            Log::error('Erro ao atualizar custo de diária: ' . $e->getMessage(), [
+                'daily_cost_id' => $daily_cost->id,
+                'trace'         => $e->getTraceAsString(),
+            ]);
 
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+            return response()->json([
+                'message' => 'Erro ao atualizar o custo da diária.',
+            ], JsonResponse::HTTP_BAD_REQUEST);
         }
     }
 
@@ -32,19 +46,28 @@ class SettingService
      */
     public function updateBudgetAllocation(BudgetAllocation $budget_allocation, Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'program'               => ['required', 'string', 'max:255'],
+            'active_project'        => ['required', 'string', 'max:255'],
+            'nature_of_expenditure' => ['required', 'string', 'max:255'],
+            'source'                => ['required', 'string', 'max:255'],
+        ]);
+
         try {
-            $budget_allocation->update($request->only([
-                'program',
-                'active_project',
-                'nature_of_expenditure',
-                'source',
-            ]));
+            $budget_allocation->update($validated);
 
-            return response()->json(['message' => 'Alocação orçamentária atualizada com sucesso.'], JsonResponse::HTTP_OK);
+            return response()->json([
+                'message' => 'Alocação orçamentária atualizada com sucesso.',
+            ], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
-            Log::error('Erro ao atualizar alocação orçamentária: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            Log::error('Erro ao atualizar alocação orçamentária: ' . $e->getMessage(), [
+                'budget_allocation_id' => $budget_allocation->id,
+                'trace'                => $e->getTraceAsString(),
+            ]);
 
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+            return response()->json([
+                'message' => 'Erro ao atualizar a alocação orçamentária.',
+            ], JsonResponse::HTTP_BAD_REQUEST);
         }
     }
 }

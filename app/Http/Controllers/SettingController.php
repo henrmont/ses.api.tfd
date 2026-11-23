@@ -18,21 +18,23 @@ class SettingController extends Controller
     ) {}
 
     /**
-     * Listar todos os custos de diárias.
+     * Listar os custos de diárias.
+     * GET /tfd/settings/daily-costs
      */
     public function getDailyCosts(): JsonResponse
     {
         $this->authorize('tfd/configuração listar');
 
-        $daily_costs = DailyCost::query()
-            ->orderBy('id', 'asc')
+        $dailyCosts = DailyCost::query()
+            ->orderBy('id')
             ->get();
 
-        return response()->json($daily_costs, JsonResponse::HTTP_OK);
+        return response()->json($dailyCosts, JsonResponse::HTTP_OK);
     }
 
     /**
-     * Atualizar valor de um custo de diária específico.
+     * Atualizar o valor de um custo de diária.
+     * PATCH /tfd/settings/daily-costs/{daily_cost}
      */
     public function updateDailyCost(DailyCost $daily_cost, Request $request): JsonResponse
     {
@@ -42,21 +44,21 @@ class SettingController extends Controller
     }
 
     /**
-     * Obter a alocação orçamentária atual.
+     * Retornar a alocação orçamentária vigente.
+     * GET /tfd/settings/budget-allocation
      */
     public function getBudgetAllocation(): JsonResponse
     {
         $this->authorize('tfd/configuração listar');
 
-        $budget_allocation = BudgetAllocation::query()
-            ->orderBy('id', 'asc')
-            ->first();
+        $budgetAllocation = BudgetAllocation::query()->first();
 
-        return response()->json($budget_allocation, JsonResponse::HTTP_OK);
+        return response()->json($budgetAllocation, JsonResponse::HTTP_OK);
     }
 
     /**
-     * Atualizar dados da alocação orçamentária.
+     * Atualizar a alocação orçamentária.
+     * PATCH /tfd/settings/budget-allocation/{budget_allocation}
      */
     public function updateBudgetAllocation(BudgetAllocation $budget_allocation, Request $request): JsonResponse
     {
