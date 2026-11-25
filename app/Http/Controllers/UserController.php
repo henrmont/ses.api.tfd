@@ -81,24 +81,23 @@ class UserController extends Controller
     }
 
     /**
-     * Atualizar parcialmente estados do usuário no módulo (PATCH: is_editable, is_valid).
+     * Alternar estado de bloqueio/edição do usuário no módulo (PATCH /{user}/lock).
      */
-    public function patchUser(User $user, Request $request): JsonResponse
+    public function lockUser(User $user): JsonResponse
     {
-        $validated = $request->validate([
-            'is_editable' => ['sometimes', 'boolean'],
-            'is_valid'    => ['sometimes', 'boolean'],
-        ]);
+        $this->authorize('tfd/usuário travar');
 
-        if (array_key_exists('is_editable', $validated)) {
-            $this->authorize('tfd/usuário travar');
-        }
+        return $this->userService->lockUser($user);
+    }
 
-        if (array_key_exists('is_valid', $validated)) {
-            $this->authorize('tfd/usuário validar');
-        }
+    /**
+     * Alternar estado de validação do usuário no módulo (PATCH /{user}/validate).
+     */
+    public function validateUser(User $user): JsonResponse
+    {
+        $this->authorize('tfd/usuário validar');
 
-        return $this->userService->patchUser($user, $validated);
+        return $this->userService->validateUser($user);
     }
 
     /**

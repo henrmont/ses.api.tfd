@@ -105,9 +105,9 @@ class UserService
     }
 
     /**
-     * Atualização parcial RESTful (PATCH) para estados de trava (is_editable) e validação (is_valid).
+     * Alternar estado de bloqueio/edição (is_editable) do usuário no módulo.
      */
-    public function patchUser(User $user, array $data): JsonResponse
+    public function lockUser(User $user): JsonResponse
     {
         try {
             $this->auth()->beginTransaction();
@@ -116,43 +116,56 @@ class UserService
                 ->where('module_id', $this->module?->id)
                 ->firstOrFail();
 
-            $messages = [];
-
-            // 1. Atualização de trava de edição (is_editable)
-            if (array_key_exists('is_editable', $data)) {
-                $userModule->update([
-                    'is_editable' => (bool) $data['is_editable'],
-                ]);
-
-                $statusText = $userModule->is_editable ? 'destravado' : 'travado';
-                $messages[] = "Usuário {$statusText} com sucesso.";
-            }
-
-            // 2. Atualização de validação de acesso (is_valid)
-            if (array_key_exists('is_valid', $data)) {
-                $userModule->update([
-                    'is_valid' => (bool) $data['is_valid'],
-                ]);
-
-                if (!$userModule->is_valid && $user->module_id === $this->module?->id) {
-                    $user->update(['module_id' => null]);
-                }
-
-                $hasAnyValidModule = $user->userModule()->where('is_valid', true)->exists();
-                $user->update(['is_valid' => $hasAnyValidModule]);
-
-                $statusText = $userModule->is_valid ? 'validado' : 'invalidado';
-                $messages[] = "Usuário {$statusText} com sucesso.";
-            }
+            $nextEditable = !(bool) $userModule->is_editable;
+            $userModule->update(['is_editable' => $nextEditable]);
 
             $this->auth()->commit();
 
+            $statusText = $nextEditable ? 'destravado' : 'travado';
+
             return response()->json([
-                'message' => implode(' ', $messages) ?: 'Usuário atualizado com sucesso.',
+                'message' => "Usuário {$statusText} com sucesso.",
             ], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
             $this->auth()->rollBack();
-            Log::error('Erro ao atualizar estado do usuário: ' . $e->getMessage());
+            Log::error('Erro ao alternar trava do usuário: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Alternar estado de validação de acesso (is_valid) do usuário no módulo.
+     */
+    public function validateUser(User $user): JsonResponse
+    {
+        try {
+            $this->auth()->beginTransaction();
+
+            $userModule = $user->userModule()
+                ->where('module_id', $this->module?->id)
+                ->firstOrFail();
+
+            $nextValid = !(bool) $userModule->is_valid;
+            $userModule->update(['is_valid' => $nextValid]);
+
+            if (!$nextValid && $user->module_id === $this->module?->id) {
+                $user->update(['module_id' => null]);
+            }
+
+            $hasAnyValidModule = $user->userModule()->where('is_valid', true)->exists();
+            $user->update(['is_valid' => $hasAnyValidModule]);
+
+            $this->auth()->commit();
+
+            $statusText = $nextValid ? 'validado' : 'invalidado';
+
+            return response()->json([
+                'message' => "Usuário {$statusText} com sucesso.",
+            ], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->auth()->rollBack();
+            Log::error('Erro ao alternar validação do usuário: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
@@ -229,7 +242,7 @@ class UserService
         } catch (Exception $e) {
             $this->tfd()->rollBack();
             $this->auth()->rollBack();
-            Log::error('Erro ao excluir usuário: ' . $e->getMessage());
+            Log::error('Erro ao excluir usuário: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
@@ -250,7 +263,7 @@ class UserService
 
             return response()->json(['message' => 'Regras do usuário atualizadas com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
-            Log::error('Erro ao atualizar regras do usuário: ' . $e->getMessage());
+            Log::error('Erro ao atualizar regras do usuário: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }

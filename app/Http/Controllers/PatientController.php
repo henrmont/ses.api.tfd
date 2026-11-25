@@ -22,12 +22,6 @@ class PatientController extends Controller
         protected PatientService $patientService
     ) {}
 
-    /*
-    |--------------------------------------------------------------------------
-    | Gestão de Pacientes / Atendimentos (TFD)
-    |--------------------------------------------------------------------------
-    */
-
     /**
      * Listar pacientes/atendimentos ativos do TFD.
      */
@@ -38,7 +32,7 @@ class PatientController extends Controller
         $patientCares = PatientCare::query()
             ->tfd()
             ->where('is_archived', false)
-            ->with(['patient.patientInfo', 'user.professional','escorts','reports.cid','reports.attachments'])
+            ->with(['patient.patientInfo', 'user.professional', 'escorts', 'reports.cid', 'reports.attachments'])
             ->latest('id')
             ->get();
 
@@ -55,7 +49,7 @@ class PatientController extends Controller
         $patientCares = PatientCare::query()
             ->tfd()
             ->where('is_archived', true)
-            ->with(['patient.patientInfo', 'user.professional','escorts','reports.cid','reports.attachments'])
+            ->with(['patient.patientInfo', 'user.professional', 'escorts', 'reports.cid', 'reports.attachments'])
             ->latest('id')
             ->get();
 
@@ -65,7 +59,7 @@ class PatientController extends Controller
     /**
      * Criar um novo paciente/atendimento.
      */
-    public function createPatient(Request $request)
+    public function createPatient(Request $request): JsonResponse
     {
         $this->authorize('tfd/paciente criar');
 
@@ -73,9 +67,9 @@ class PatientController extends Controller
     }
 
     /**
-     * Atualizar dados de um paciente/atendimento.
+     * Atualizar dados completos de um paciente/atendimento.
      */
-    public function updatePatient(PatientCare $patient_care, Request $request)
+    public function updatePatient(PatientCare $patient_care, Request $request): JsonResponse
     {
         $this->authorize('tfd/paciente atualizar');
 
@@ -85,7 +79,7 @@ class PatientController extends Controller
     /**
      * Arquivar um atendimento de paciente.
      */
-    public function archivePatient(PatientCare $patient_care)
+    public function archivePatient(PatientCare $patient_care): JsonResponse
     {
         $this->authorize('tfd/paciente atualizar');
 
@@ -95,7 +89,7 @@ class PatientController extends Controller
     /**
      * Desalocar/remover um atendimento do arquivo.
      */
-    public function movePatientFromArchive(PatientCare $patient_care)
+    public function movePatientFromArchive(PatientCare $patient_care): JsonResponse
     {
         $this->authorize('tfd/paciente atualizar');
 
@@ -105,7 +99,7 @@ class PatientController extends Controller
     /**
      * Movimentar um atendimento do setor "Outros".
      */
-    public function movePatientFromOthers(PatientCare $patient_care)
+    public function movePatientFromOthers(PatientCare $patient_care): JsonResponse
     {
         $this->authorize('tfd/paciente atualizar');
 
@@ -115,7 +109,7 @@ class PatientController extends Controller
     /**
      * Validar status de um atendimento.
      */
-    public function validatePatient(PatientCare $patient_care)
+    public function validatePatient(PatientCare $patient_care): JsonResponse
     {
         $this->authorize('tfd/paciente validar');
 
@@ -125,7 +119,7 @@ class PatientController extends Controller
     /**
      * Finalizar o retorno de uma solicitação no contexto de pareceres.
      */
-    public function finishBackPatient(PatientCare $patient_care)
+    public function finishBackPatient(PatientCare $patient_care): JsonResponse
     {
         $this->authorize('tfd/paciente atualizar');
 
@@ -155,7 +149,7 @@ class PatientController extends Controller
     /**
      * Cadastrar acompanhante para um atendimento.
      */
-    public function createPatientEscort(PatientCare $patient_care, Request $request)
+    public function createPatientEscort(PatientCare $patient_care, Request $request): JsonResponse
     {
         $this->authorize('tfd/paciente acompanhantes');
 
@@ -165,7 +159,7 @@ class PatientController extends Controller
     /**
      * Atualizar dados do acompanhante.
      */
-    public function updatePatientEscort(PatientCare $patient_care, Escort $escort, Request $request)
+    public function updatePatientEscort(PatientCare $patient_care, Escort $escort, Request $request): JsonResponse
     {
         $this->authorize('tfd/paciente acompanhantes');
 
@@ -173,9 +167,9 @@ class PatientController extends Controller
     }
 
     /**
-     * Excluir vinculo de acompanhante com o atendimento.
+     * Excluir vínculo de acompanhante com o atendimento.
      */
-    public function deletePatientEscort(PatientCare $patient_care, PatientCareEscort $patient_care_escort)
+    public function deletePatientEscort(PatientCare $patient_care, PatientCareEscort $patient_care_escort): JsonResponse
     {
         $this->authorize('tfd/paciente acompanhantes');
 
@@ -221,7 +215,7 @@ class PatientController extends Controller
     /**
      * Criar novo laudo para o atendimento.
      */
-    public function createPatientReport(PatientCare $patient_care, Request $request)
+    public function createPatientReport(PatientCare $patient_care, Request $request): JsonResponse
     {
         $this->authorize('tfd/paciente laudos');
 
@@ -231,7 +225,7 @@ class PatientController extends Controller
     /**
      * Atualizar laudo existente.
      */
-    public function updatePatientReport(PatientCare $patient_care, Report $report, Request $request)
+    public function updatePatientReport(PatientCare $patient_care, Report $report, Request $request): JsonResponse
     {
         $this->authorize('tfd/paciente laudos');
 
@@ -241,7 +235,7 @@ class PatientController extends Controller
     /**
      * Excluir laudo do atendimento.
      */
-    public function deletePatientReport(PatientCare $patient_care, Report $report)
+    public function deletePatientReport(PatientCare $patient_care, Report $report): JsonResponse
     {
         $this->authorize('tfd/paciente laudos');
 
@@ -271,7 +265,7 @@ class PatientController extends Controller
     /**
      * Anexar arquivo a um laudo.
      */
-    public function createReportAttachment(PatientCare $patient_care, Report $report, Request $request)
+    public function createReportAttachment(PatientCare $patient_care, Report $report, Request $request): JsonResponse
     {
         $this->authorize('tfd/paciente laudos');
 
@@ -281,8 +275,12 @@ class PatientController extends Controller
     /**
      * Atualizar anexo do laudo.
      */
-    public function updateReportAttachment(PatientCare $patient_care, Report $report, ReportAttachment $report_attachment, Request $request)
-    {
+    public function updateReportAttachment(
+        PatientCare $patient_care,
+        Report $report,
+        ReportAttachment $report_attachment,
+        Request $request
+    ): JsonResponse {
         $this->authorize('tfd/paciente laudos');
 
         return $this->patientService->updateReportAttachment($report_attachment, $request);
@@ -291,8 +289,11 @@ class PatientController extends Controller
     /**
      * Remover anexo do laudo.
      */
-    public function deleteReportAttachment(PatientCare $patient_care, Report $report, ReportAttachment $report_attachment)
-    {
+    public function deleteReportAttachment(
+        PatientCare $patient_care,
+        Report $report,
+        ReportAttachment $report_attachment
+    ): JsonResponse {
         $this->authorize('tfd/paciente laudos');
 
         return $this->patientService->deleteReportAttachment($report_attachment);
@@ -300,73 +301,73 @@ class PatientController extends Controller
 
     /*
     |--------------------------------------------------------------------------
-    | Consultas Diretas (Busca e Validação)
+    | Consultas Diretas (Busca e Validação via Query Params)
     |--------------------------------------------------------------------------
     */
 
     /**
-     * Buscar dados de paciente pelo número do CNS e indicar se já possui cadastro no TFD.
+     * Buscar dados de paciente pelo CNS ou Documento (?cns=... ou ?document=...).
      */
-    public function getPatientCns(string $cns): JsonResponse
+    public function searchPatient(Request $request): JsonResponse
     {
         $this->authorize('tfd/paciente listar');
 
-        $cleanCns = preg_replace('/\D/', '', $cns);
+        if ($request->filled('cns')) {
+            $cleanCns = preg_replace('/\D/', '', (string) $request->query('cns'));
 
-        $patient = Patient::query()
-            ->withExists(['patientCares as exists_in_tfd' => fn ($q) => $q->tfd()])
-            ->where('cns', $cleanCns)
-            ->first();
+            $patient = Patient::query()
+                ->withExists(['patientCares as exists_in_tfd' => fn($q) => $q->tfd()])
+                ->where('cns', $cleanCns)
+                ->first();
 
-        return response()->json($patient, JsonResponse::HTTP_OK);
+            return response()->json($patient, JsonResponse::HTTP_OK);
+        }
+
+        if ($request->filled('document')) {
+            $cleanDocument = preg_replace('/\D/', '', (string) $request->query('document'));
+
+            $patient = Patient::query()
+                ->withExists(['patientCares as exists_in_tfd' => fn($q) => $q->tfd()])
+                ->where('document', $cleanDocument)
+                ->first();
+
+            return response()->json($patient, JsonResponse::HTTP_OK);
+        }
+
+        return response()->json([
+            'message' => 'Informe o parâmetro cns ou document para busca.',
+        ], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     /**
-     * Buscar dados de paciente pelo número do documento (CPF/RG) e indicar se já possui cadastro no TFD.
+     * Buscar dados de acompanhante pelo CNS ou Documento (?cns=... ou ?document=...).
      */
-    public function getPatientDocument(string $document): JsonResponse
-    {
-        $this->authorize('tfd/paciente listar');
-
-        $cleanDocument = preg_replace('/\D/', '', $document);
-
-        $patient = Patient::query()
-            ->withExists(['patientCares as exists_in_tfd' => fn ($q) => $q->tfd()])
-            ->where('document', $cleanDocument)
-            ->first();
-
-        return response()->json($patient, JsonResponse::HTTP_OK);
-    }
-
-    /**
-     * Buscar dados de acompanhante pelo número do CNS.
-     */
-    public function getEscortCns(string $cns): JsonResponse
-    {
-        $this->authorize('tfd/paciente acompanhantes');
-
-        $cleanCns = preg_replace('/\D/', '', $cns);
-
-        $escort = Escort::query()
-            ->where('cns', $cleanCns)
-            ->first();
-
-        return response()->json($escort, JsonResponse::HTTP_OK);
-    }
-
-    /**
-     * Buscar dados de acompanhante pelo número do documento (CPF/RG).
-     */
-    public function getEscortDocument(string $document): JsonResponse
+    public function searchEscort(Request $request): JsonResponse
     {
         $this->authorize('tfd/paciente acompanhantes');
 
-        $cleanDocument = preg_replace('/\D/', '', $document);
+        if ($request->filled('cns')) {
+            $cleanCns = preg_replace('/\D/', '', (string) $request->query('cns'));
 
-        $escort = Escort::query()
-            ->where('document', $cleanDocument)
-            ->first();
+            $escort = Escort::query()
+                ->where('cns', $cleanCns)
+                ->first();
 
-        return response()->json($escort, JsonResponse::HTTP_OK);
+            return response()->json($escort, JsonResponse::HTTP_OK);
+        }
+
+        if ($request->filled('document')) {
+            $cleanDocument = preg_replace('/\D/', '', (string) $request->query('document'));
+
+            $escort = Escort::query()
+                ->where('document', $cleanDocument)
+                ->first();
+
+            return response()->json($escort, JsonResponse::HTTP_OK);
+        }
+
+        return response()->json([
+            'message' => 'Informe o parâmetro cns ou document para busca.',
+        ], JsonResponse::HTTP_UNPROCESSABLE_ENTITY);
     }
 }

@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Events\PatientEvent;
 use App\Models\Archive;
 use App\Models\Escort;
+use App\Models\Module;
 use App\Models\Patient;
 use App\Models\PatientCare;
 use App\Models\PatientCareEscort;
@@ -13,6 +13,7 @@ use App\Models\Report;
 use App\Models\ReportAttachment;
 use Exception;
 use Illuminate\Database\Connection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -45,11 +46,12 @@ class PatientService
         return DB::connection('storage');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Gestão de Pacientes e Atendimentos
-    |--------------------------------------------------------------------------
-    */
+    protected ?Module $module;
+
+    public function __construct()
+    {
+        $this->module = Module::where('name', 'tfd')->first();
+    }
 
     /**
      * Criar um novo paciente e seu atendimento (PatientCare).
@@ -61,36 +63,28 @@ class PatientService
             $this->core()->beginTransaction();
             $this->storage()->beginTransaction();
 
-            // 1. Limpa os campos de controle e arquivos do payload
-            $patientData = $request->except([
-                'observation', 
-                'control_number', 
-                'sigadoc',
-                'file_cns', 
-                'file_document', 
-                'file_deficiency', 
-                'file_address',
-                'file_sigadoc'
-            ]);
+            $patientPayload = $this->getPatientPayload($request);
 
-            // 2. Busca o paciente na conexão 'core'
             $patient = Patient::on('core')
-                ->where(function ($query) use ($request) {
-                    $query->where('cns', $request->cns)
-                        ->orWhere('document', $request->document);
+                ->where(function ($query) use ($patientPayload) {
+                    if (!empty($patientPayload['cns'])) {
+                        $query->where('cns', $patientPayload['cns']);
+                    }
+                    if (!empty($patientPayload['document'])) {
+                        $query->orWhere('document', $patientPayload['document']);
+                    }
                 })
                 ->first();
 
             if ($patient) {
-                $patient->update($patientData);
+                $patient->update($patientPayload);
                 $patientId = $patient->id;
             } else {
-                // Insere diretamente via Query Builder na conexão 'core' e recupera o ID
-                $patientId = $this->core()->table('patients')->insertGetId($patientData);
+                $patientId = $this->core()->table('patients')->insertGetId($patientPayload);
+                $patient = Patient::on('core')->findOrFail($patientId);
             }
 
-            // 3. Insere os dados na tabela 'patient_cares' na conexão 'core'
-            $patientCareId = $this->core()
+            $this->core()
                 ->table('patient_cares')
                 ->insertGetId([
                     'patient_id' => $patientId,
@@ -98,10 +92,6 @@ class PatientService
                     'user_id'    => auth()->user()->id,
                 ]);
 
-            // Recria a variável $patient como uma instância do Model na conexão 'core'
-            $patient = Patient::on('core')->find($patientId);
-
-            // 4. Processa os anexos com a variável $patient recriada
             $this->processFileAttachments($patient, $request, [
                 'file_cns'        => 'file_cns_id',
                 'file_document'   => 'file_document_id',
@@ -109,24 +99,20 @@ class PatientService
                 'file_address'    => 'file_address_id',
             ]);
 
-            // 5. Cria o PatientInfo na conexão padrão (TFD)
-            $patientInfo = PatientInfo::create([
-                'patient_id'     => $patientId,
-                'observation'    => $request->observation,
-                'control_number' => $request->control_number,
-                'sigadoc'        => $request->sigadoc,
-            ]);
+            $patientInfo = PatientInfo::query()->updateOrCreate(
+                ['patient_id' => $patientId],
+                $request->only(['observation', 'control_number', 'sigadoc'])
+            );
 
             $this->processFileAttachments($patientInfo, $request, [
                 'file_sigadoc' => 'file_sigadoc_id',
             ]);
 
-            // Commits
             $this->tfd()->commit();
             $this->core()->commit();
             $this->storage()->commit();
 
-            return response()->json(['message' => 'Paciente cadastrado com sucesso.'], JsonResponse::HTTP_OK);
+            return response()->json(['message' => 'Paciente cadastrado com sucesso.'], JsonResponse::HTTP_CREATED);
         } catch (Exception $e) {
             $this->tfd()->rollBack();
             $this->core()->rollBack();
@@ -149,7 +135,7 @@ class PatientService
             $this->storage()->beginTransaction();
 
             $patient = $patient_care->patient;
-            $patient->update($request->except(['observation', 'control_number']));
+            $patient->update($this->getPatientPayload($request));
 
             $this->processFileAttachments($patient, $request, [
                 'file_cns'        => 'file_cns_id',
@@ -158,21 +144,18 @@ class PatientService
                 'file_address'    => 'file_address_id',
             ]);
 
-            $patient_info = PatientInfo::query()
-                ->updateOrCreate(
-                    ['patient_id' => $patient_care->patient->id],
-                    $request->only(['observation', 'control_number', 'sigadoc'])
-                );
+            $patientInfo = PatientInfo::query()->updateOrCreate(
+                ['patient_id' => $patient->id],
+                $request->only(['observation', 'control_number', 'sigadoc'])
+            );
 
-            $this->processFileAttachments($patient_info, $request, [
+            $this->processFileAttachments($patientInfo, $request, [
                 'file_sigadoc' => 'file_sigadoc_id',
             ]);
 
             $this->tfd()->commit();
             $this->core()->commit();
             $this->storage()->commit();
-
-            // broadcast(new PatientEvent($patient_care))->toOthers();
 
             return response()->json(['message' => 'Paciente atualizado com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
@@ -186,11 +169,108 @@ class PatientService
         }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Gestão de Acompanhantes
-    |--------------------------------------------------------------------------
-    */
+    /**
+     * Arquivar atendimento do paciente.
+     */
+    public function archivePatient(PatientCare $patient_care): JsonResponse
+    {
+        try {
+            $this->core()->beginTransaction();
+            $patient_care->update(['is_archived' => true]);
+            $this->core()->commit();
+
+            return response()->json(['message' => 'Paciente arquivado com sucesso.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->core()->rollBack();
+            Log::error('Erro ao arquivar paciente: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Retirar atendimento do arquivo e atribuir ao usuário autenticado.
+     */
+    public function movePatientFromArchive(PatientCare $patient_care): JsonResponse
+    {
+        try {
+            $this->core()->beginTransaction();
+            $patient_care->update([
+                'is_archived'  => false,
+                'user_id'      => auth()->user()->id,
+                'back_to_user' => 'Retirou do arquivo',
+            ]);
+            $this->core()->commit();
+
+            return response()->json(['message' => 'Paciente transferido para sua caixa.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->core()->rollBack();
+            Log::error('Erro ao transferir paciente do arquivo: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Transferir atendimento do setor "Outros" para a caixa do usuário autenticado.
+     */
+    public function movePatientFromOthers(PatientCare $patient_care): JsonResponse
+    {
+        try {
+            $this->core()->beginTransaction();
+            $patient_care->update([
+                'user_id' => auth()->user()->id,
+            ]);
+            $this->core()->commit();
+
+            return response()->json(['message' => 'Paciente transferido para sua caixa.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->core()->rollBack();
+            Log::error('Erro ao transferir paciente do setor outros: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Alternar validação do atendimento do paciente.
+     */
+    public function validatePatient(PatientCare $patient_care): JsonResponse
+    {
+        try {
+            $this->core()->beginTransaction();
+            $patient_care->update(['is_valid' => !$patient_care->is_valid]);
+            $this->core()->commit();
+
+            $statusText = $patient_care->is_valid ? 'validado' : 'invalidado';
+
+            return response()->json(['message' => "Paciente {$statusText} com sucesso."], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->core()->rollBack();
+            Log::error('Erro ao validar paciente: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
+
+    /**
+     * Finalizar retorno de parecer do paciente.
+     */
+    public function finishBackPatient(PatientCare $patient_care): JsonResponse
+    {
+        try {
+            $this->core()->beginTransaction();
+            $patient_care->update(['back_to_user' => null]);
+            $this->core()->commit();
+
+            return response()->json(['message' => 'Retorno finalizado com sucesso.'], JsonResponse::HTTP_OK);
+        } catch (Exception $e) {
+            $this->core()->rollBack();
+            Log::error('Erro ao finalizar retorno do paciente: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+
+            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        }
+    }
 
     /**
      * Cadastrar e vincular um acompanhante ao atendimento.
@@ -201,29 +281,38 @@ class PatientService
             $this->tfd()->beginTransaction();
             $this->storage()->beginTransaction();
 
-            $escort = Escort::where('cns', $request->cns)
-                ->orWhere('document', $request->document)
+            $escortPayload = $this->getEscortPayload($request);
+
+            $escort = Escort::query()
+                ->where(function ($query) use ($escortPayload) {
+                    if (!empty($escortPayload['cns'])) {
+                        $query->where('cns', $escortPayload['cns']);
+                    }
+                    if (!empty($escortPayload['document'])) {
+                        $query->orWhere('document', $escortPayload['document']);
+                    }
+                })
                 ->first();
 
             if ($escort) {
-                $escort->update($request->all());
-                $escort->patientCareEscort()->create([
+                $escort->update($escortPayload);
+                $escort->patientCareEscort()->firstOrCreate([
                     'patient_care_id' => $patient_care->id,
                 ]);
             } else {
-                $escort = $patient_care->escorts()->create($request->all());
+                $escort = $patient_care->escorts()->create($escortPayload);
             }
 
             $this->processFileAttachments($escort, $request, [
-                'file_cns' => 'file_cns_id',
+                'file_cns'      => 'file_cns_id',
                 'file_document' => 'file_document_id',
-                'file_address' => 'file_address_id',
+                'file_address'  => 'file_address_id',
             ]);
 
             $this->tfd()->commit();
             $this->storage()->commit();
 
-            return response()->json(['message' => 'Acompanhante criado com sucesso.'], JsonResponse::HTTP_OK);
+            return response()->json(['message' => 'Acompanhante criado com sucesso.'], JsonResponse::HTTP_CREATED);
         } catch (Exception $e) {
             $this->tfd()->rollBack();
             $this->storage()->rollBack();
@@ -243,12 +332,12 @@ class PatientService
             $this->tfd()->beginTransaction();
             $this->storage()->beginTransaction();
 
-            $escort->update($request->all());
+            $escort->update($this->getEscortPayload($request));
 
             $this->processFileAttachments($escort, $request, [
-                'file_cns' => 'file_cns_id',
+                'file_cns'      => 'file_cns_id',
                 'file_document' => 'file_document_id',
-                'file_address' => 'file_address_id',
+                'file_address'  => 'file_address_id',
             ]);
 
             $this->tfd()->commit();
@@ -272,26 +361,17 @@ class PatientService
     {
         try {
             $this->tfd()->beginTransaction();
-
             $patient_care_escort->delete();
-
             $this->tfd()->commit();
 
             return response()->json(['message' => 'Acompanhante deletado com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
             $this->tfd()->rollBack();
-
-            Log::error('Erro ao deletar acompanhante: ' . $e->getMessage());
+            Log::error('Erro ao deletar acompanhante: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Gestão de Laudos
-    |--------------------------------------------------------------------------
-    */
 
     /**
      * Registrar um novo laudo no atendimento.
@@ -301,15 +381,14 @@ class PatientService
         try {
             $this->tfd()->beginTransaction();
 
-            $patient_care->reports()->create($request->all());
+            $patient_care->reports()->create($this->getReportPayload($request));
 
             $this->tfd()->commit();
 
-            return response()->json(['message' => 'Laudo criado com sucesso.'], JsonResponse::HTTP_OK);
+            return response()->json(['message' => 'Laudo criado com sucesso.'], JsonResponse::HTTP_CREATED);
         } catch (Exception $e) {
             $this->tfd()->rollBack();
-
-            Log::error('Erro ao criar laudo: ' . $e->getMessage());
+            Log::error('Erro ao criar laudo: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
@@ -323,15 +402,14 @@ class PatientService
         try {
             $this->tfd()->beginTransaction();
 
-            $report->update($request->all());
+            $report->update($this->getReportPayload($request));
 
             $this->tfd()->commit();
 
             return response()->json(['message' => 'Laudo atualizado com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
             $this->tfd()->rollBack();
-
-            Log::error('Erro ao atualizar laudo: ' . $e->getMessage());
+            Log::error('Erro ao atualizar laudo: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
@@ -344,26 +422,17 @@ class PatientService
     {
         try {
             $this->tfd()->beginTransaction();
-
             $report->delete();
-
             $this->tfd()->commit();
 
             return response()->json(['message' => 'Laudo deletado com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
             $this->tfd()->rollBack();
-
-            Log::error('Erro ao deletar laudo: ' . $e->getMessage());
+            Log::error('Erro ao deletar laudo: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Gestão de Anexos do Laudo
-    |--------------------------------------------------------------------------
-    */
 
     /**
      * Anexar um arquivo ao laudo.
@@ -377,14 +446,14 @@ class PatientService
             $archiveId = $this->storeArchive($request->file('file'));
 
             $report->attachments()->create([
-                'name' => $request->name,
+                'name'       => $request->input('name'),
                 'archive_id' => $archiveId,
             ]);
 
             $this->tfd()->commit();
             $this->storage()->commit();
 
-            return response()->json(['message' => 'Anexo criado com sucesso.'], JsonResponse::HTTP_OK);
+            return response()->json(['message' => 'Anexo criado com sucesso.'], JsonResponse::HTTP_CREATED);
         } catch (Exception $e) {
             $this->tfd()->rollBack();
             $this->storage()->rollBack();
@@ -396,21 +465,23 @@ class PatientService
     }
 
     /**
-     * Atualizar dados ou o arquivo do anexo do laudo.
+     * Atualizar um anexo do laudo.
      */
-    public function updateReportAttachment(ReportAttachment $report_attachment, Request $request): JsonResponse
+    public function updateReportAttachment(ReportAttachment $attachment, Request $request): JsonResponse
     {
         try {
             $this->tfd()->beginTransaction();
             $this->storage()->beginTransaction();
 
-            $payload = ['name' => $request->name];
+            $data = [
+                'name' => $request->input('name'),
+            ];
 
             if ($request->hasFile('file')) {
-                $payload['archive_id'] = $this->storeArchive($request->file('file'));
+                $data['archive_id'] = $this->storeArchive($request->file('file'), $attachment->archive_id);
             }
 
-            $report_attachment->update($payload);
+            $attachment->update($data);
 
             $this->tfd()->commit();
             $this->storage()->commit();
@@ -433,164 +504,113 @@ class PatientService
     {
         try {
             $this->tfd()->beginTransaction();
-
             $report_attachment->delete();
-
             $this->tfd()->commit();
 
             return response()->json(['message' => 'Anexo deletado com sucesso.'], JsonResponse::HTTP_OK);
         } catch (Exception $e) {
             $this->tfd()->rollBack();
-
-            Log::error('Erro ao deletar anexo do laudo: ' . $e->getMessage());
+            Log::error('Erro ao deletar anexo do laudo: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
 
             return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
         }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Alteração de Estado e Movimentações
-    |--------------------------------------------------------------------------
-    */
-
     /**
-     * Arquivar atendimento do paciente.
+     * Monta o payload de dados cadastrais do paciente.
      */
-    public function archivePatient(PatientCare $patient_care): JsonResponse
+    private function getPatientPayload(Request $request): array
     {
-        try {
-            $patient_care->update(['is_archived' => true]);
-
-            return response()->json(['message' => 'Paciente arquivado com sucesso.'], JsonResponse::HTTP_OK);
-        } catch (Exception $e) {
-            Log::error('Erro ao arquivar paciente: ' . $e->getMessage());
-
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
-        }
+        return [
+            'name'           => $request->name,
+            'cns'            => $this->onlyDigits($request->cns),
+            'document_type'  => $request->document_type,
+            'document'       => $this->onlyDigits($request->document),
+            'birth_date'     => $request->birth_date,
+            'gender'         => $request->gender,
+            'newborn'        => $request->newborn,
+            'race'           => $request->race,
+            'ethnicity'      => $request->ethnicity,
+            'marital_status' => $request->marital_status,
+            'mother_name'    => $request->mother_name,
+            'father_name'    => $request->father_name,
+            'naturalness'    => $request->naturalness,
+            'phone'          => $this->onlyDigits($request->phone),
+            'cell_phone'     => $this->onlyDigits($request->cell_phone),
+            'email'          => $request->email,
+            'profession'     => $request->profession,
+            'deficiency'     => $request->deficiency,
+            'cep'            => $this->onlyDigits($request->cep),
+            'address'        => $request->address,
+            'number'         => $request->number,
+            'complement'     => $request->complement,
+            'neighborhood'   => $request->neighborhood,
+            'city'           => $request->city,
+            'state'          => $request->state,
+        ];
     }
 
     /**
-     * Retirar atendimento do arquivo e atribuir ao usuário autenticado.
+     * Monta o payload de dados cadastrais do acompanhante.
      */
-    public function movePatientFromArchive(PatientCare $patient_care): JsonResponse
+    private function getEscortPayload(Request $request): array
     {
-        try {
-            $patient_care->update([
-                'is_archived' => false,
-                'user_id' => auth()->user()->id,
-                'back_to_user' => 'Retirou do arquivo',
-            ]);
-
-            return response()->json(['message' => 'Paciente transferido para sua caixa.'], JsonResponse::HTTP_OK);
-        } catch (Exception $e) {
-            Log::error('Erro ao transferir paciente do arquivo: ' . $e->getMessage());
-
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
-        }
+        return [
+            'cns'             => $this->onlyDigits($request->cns),
+            'document'        => $this->onlyDigits($request->document),
+            'name'            => $request->name,
+            'relation'        => $request->relation,
+            'birth_date'      => $request->birth_date,
+            'gender'          => $request->gender,
+            'is_same_address' => $request->is_same_address,
+            'cep'             => $this->onlyDigits($request->cep),
+            'address'         => $request->address,
+            'number'          => $request->number,
+            'complement'      => $request->complement,
+            'neighborhood'    => $request->neighborhood,
+            'city'            => $request->city,
+            'state'           => $request->state,
+        ];
     }
 
     /**
-     * Transferir atendimento do setor "Outros" para a caixa do usuário autenticado.
+     * Monta o payload de dados do laudo.
      */
-    public function movePatientFromOthers(PatientCare $patient_care): JsonResponse
+    protected function getReportPayload(Request $request): array
     {
-        try {
-            $patient_care->update([
-                'user_id' => auth()->user()->id,
-            ]);
-
-            return response()->json(['message' => 'Paciente transferido para sua caixa.'], JsonResponse::HTTP_OK);
-        } catch (Exception $e) {
-            Log::error('Erro ao transferir paciente do setor outros: ' . $e->getMessage());
-
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
-        }
+        return [
+            'protocol' => $request->input('protocol'),
+            'specialty' => $request->input('specialty'),
+            'cid_id' => $request->input('cid_id'),
+            'lawsuit' => $request->boolean('lawsuit'),
+            'diagnosis' => $request->input('diagnosis'),
+            'is_editable' => true,
+            'is_export' => false,
+        ];
     }
 
     /**
-     * Alternar validação do atendimento do paciente.
+     * Remove caracteres não numéricos quando o valor existir.
      */
-    public function validatePatient(PatientCare $patient_care): JsonResponse
+    private function onlyDigits(mixed $value): ?string
     {
-        try {
-            $patient_care->update(['is_valid' => !$patient_care->is_valid]);
-            $statusText = $patient_care->is_valid ? 'validado' : 'invalidado';
-
-            return response()->json(['message' => "Paciente {$statusText} com sucesso."], JsonResponse::HTTP_OK);
-        } catch (Exception $e) {
-            Log::error('Erro ao validar/invalidar paciente: ' . $e->getMessage());
-
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
+        if ($value === null || $value === '') {
+            return null;
         }
+
+        return preg_replace('/\D/', '', (string) $value);
     }
 
     /**
-     * Finalizar retorno pendente do paciente.
+     * Processa múltiplos uploads de arquivos e vincula seus archive_id no model.
      */
-    public function finishBackPatient(PatientCare $patient_care): JsonResponse
-    {
-        try {
-            $patient_care->update(['back_to_user' => null]);
-
-            return response()->json(['message' => 'Paciente atualizado com sucesso.'], JsonResponse::HTTP_OK);
-        } catch (Exception $e) {
-            Log::error('Erro ao finalizar retorno do paciente: ' . $e->getMessage());
-
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
-        }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Cálculos Financeiros
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Calcular o saldo referente aos custos e prestação de contas do atendimento.
-     */
-    public function calcBalance(PatientCare $patient_care): JsonResponse
-    {
-        try {
-            $totalCosts = $patient_care->reports
-                ->flatMap->patientRequests
-                ->flatMap->costAssistances
-                ->flatMap->costAssistanceDailies
-                ->sum(fn ($daily) => $daily->amount * optional($daily->dailyCost)->value);
-
-            $totalAccountabilities = $patient_care->reports
-                ->flatMap->patientRequests
-                ->flatMap->accountabilities
-                ->flatMap->accountabilityDailies
-                ->sum(fn ($daily) => $daily->amount * optional($daily->dailyCost)->value);
-
-            $balance = $totalCosts - $totalAccountabilities;
-
-            return response()->json($balance, JsonResponse::HTTP_OK);
-        } catch (Exception $e) {
-            Log::error('Erro ao calcular saldo do paciente: ' . $e->getMessage());
-
-            return response()->json(['message' => $e->getMessage()], JsonResponse::HTTP_BAD_REQUEST);
-        }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Métodos Auxiliares Privados
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Processa o upload de arquivos para um determinado modelo.
-     */
-    private function processFileAttachments($model, Request $request, array $fileFields): void
+    private function processFileAttachments(Model $model, Request $request, array $fileMap): void
     {
         $updates = [];
 
-        foreach ($fileFields as $requestKey => $modelColumn) {
-            if ($request->hasFile($requestKey)) {
-                $updates[$modelColumn] = $this->storeArchive($request->file($requestKey));
+        foreach ($fileMap as $inputKey => $columnKey) {
+            if ($request->hasFile($inputKey)) {
+                $updates[$columnKey] = $this->storeArchive($request->file($inputKey));
             }
         }
 
@@ -600,9 +620,10 @@ class PatientService
     }
 
     /**
-     * Armazena um arquivo como Base64 no banco de dados de storage.
+     * Salva o arquivo no banco de storage codificado em Base64 Data URI.
+     * Se informado $previousArchiveId, vincula o arquivo substituído ao novo id via ref_id.
      */
-    private function storeArchive(UploadedFile $file): int
+    private function storeArchive(UploadedFile $file, ?int $previousArchiveId = null): int
     {
         $fileContents = file_get_contents($file->getRealPath());
         $base64String = base64_encode($fileContents);
@@ -610,6 +631,12 @@ class PatientService
         $dataUri = "data:{$mimeType};base64,{$base64String}";
 
         $archive = Archive::on('storage')->create(['archive' => $dataUri]);
+
+        if ($previousArchiveId) {
+            Archive::on('storage')
+                ->where('id', $previousArchiveId)
+                ->update(['ref_id' => $archive->id]);
+        }
 
         return $archive->id;
     }

@@ -27,11 +27,14 @@ Route::middleware(['api', Auth::class])
         Route::get('roles', 'getRoles')->name('roles.index');
         Route::get('availability', 'checkAvailability')->name('availability');
 
-        // CRUD principal e atualização parcial (lock, validate, etc.)
+        // CRUD principal
         Route::post('/', 'createUser')->name('store');
         Route::put('{user}', 'updateUser')->name('update');
-        Route::patch('{user}', 'patchUser')->name('patch');
         Route::delete('{user}', 'deleteUser')->name('destroy');
+
+        // Ações de estado
+        Route::patch('{user}/lock', 'lockUser')->name('lock');
+        Route::patch('{user}/validate', 'validateUser')->name('validate');
 
         // Sub-recurso de relacionamentos
         Route::put('{user}/roles', 'rolesUser')->name('roles.update');
@@ -72,12 +75,18 @@ Route::middleware(['api', Auth::class])
     ->controller(PatientController::class)
     ->group(function () {
         // ==========================================
-        // 1. RECURSO PRINCIPAL: PACIENTES (PATIENT CARES)
+        // 1. CONSULTAS DIRETAS / VALIDAÇÕES (SEARCH)
+        // ==========================================
+        Route::get('search', 'searchPatient')->name('search');
+        Route::get('escorts/search', 'searchEscort')->name('escorts.search');
+
+        // ==========================================
+        // 2. RECURSO PRINCIPAL: PACIENTES (PATIENT CARES)
         // ==========================================
         Route::get('/', 'getPatients')->name('index');
         Route::get('archived', 'getArchivePatients')->name('archived');
         Route::post('/', 'createPatient')->name('store');
-        Route::post('{patient_care}', 'updatePatient')->name('update'); // POST com suporte a multipart/form-data
+        Route::match(['put', 'post'], '{patient_care}', 'updatePatient')->name('update');
 
         // Ações de Estado e Transições
         Route::patch('{patient_care}/archive', 'archivePatient')->name('archive');
@@ -87,22 +96,12 @@ Route::middleware(['api', Auth::class])
         Route::patch('{patient_care}/finish-back', 'finishBackPatient')->name('finish-back');
 
         // ==========================================
-        // 2. CONSULTAS DIRETAS / VALIDAÇÕES (SEARCH)
-        // ==========================================
-        Route::get('search/cns/{cns}', 'getPatientCns')->name('search.cns');
-        Route::get('search/document/{document}', 'getPatientDocument')->name('search.document');
-
-        // ==========================================
         // 3. SUB-RECURSO: ACOMPANHANTES (ESCORTS)
         // ==========================================
         Route::get('{patient_care}/escorts', 'getPatientEscorts')->name('escorts.index');
         Route::post('{patient_care}/escorts', 'createPatientEscort')->name('escorts.store');
-        Route::post('{patient_care}/escorts/{escort}', 'updatePatientEscort')->name('escorts.update');
+        Route::match(['put', 'post'], '{patient_care}/escorts/{escort}', 'updatePatientEscort')->name('escorts.update');
         Route::delete('{patient_care}/escorts/{patient_care_escort}', 'deletePatientEscort')->name('escorts.destroy');
-
-        // Consultas Diretas de Acompanhantes
-        Route::get('escorts/search/cns/{cns}', 'getEscortCns')->name('escorts.search.cns');
-        Route::get('escorts/search/document/{document}', 'getEscortDocument')->name('escorts.search.document');
 
         // ==========================================
         // 4. SUB-RECURSO: LAUDOS (REPORTS) & CIDs
@@ -110,7 +109,7 @@ Route::middleware(['api', Auth::class])
         Route::get('{patient_care}/cids', 'getCids')->name('cids.index');
         Route::get('{patient_care}/reports', 'getPatientReports')->name('reports.index');
         Route::post('{patient_care}/reports', 'createPatientReport')->name('reports.store');
-        Route::patch('{patient_care}/reports/{report}', 'updatePatientReport')->name('reports.update');
+        Route::put('{patient_care}/reports/{report}', 'updatePatientReport')->name('reports.update');
         Route::delete('{patient_care}/reports/{report}', 'deletePatientReport')->name('reports.destroy');
 
         // ==========================================
@@ -118,7 +117,7 @@ Route::middleware(['api', Auth::class])
         // ==========================================
         Route::get('{patient_care}/reports/{report}/attachments', 'getReportAttachments')->name('reports.attachments.index');
         Route::post('{patient_care}/reports/{report}/attachments', 'createReportAttachment')->name('reports.attachments.store');
-        Route::post('{patient_care}/reports/{report}/attachments/{report_attachment}', 'updateReportAttachment')->name('reports.attachments.update');
+        Route::match(['put', 'post'], '{patient_care}/reports/{report}/attachments/{report_attachment}', 'updateReportAttachment')->name('reports.attachments.update');
         Route::delete('{patient_care}/reports/{report}/attachments/{report_attachment}', 'deleteReportAttachment')->name('reports.attachments.destroy');
     });
 
