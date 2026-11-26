@@ -8,6 +8,7 @@ use App\Models\PatientRequest;
 use App\Models\PatientRequestAttachment;
 use App\Models\Professional;
 use App\Services\PatientRequestService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,27 +34,8 @@ class PatientRequestController extends Controller
     {
         $this->authorize('tfd/solicitação listar');
 
-        $patientRequests = PatientRequest::query()
-            ->notPatientBack()
+        $patientRequests = $this->baseRequestQuery()
             ->where('is_owner_archived', false)
-            ->with([
-                'report.patientCare.patient',
-                'report.patientCare.user.professional',
-                'report.cid',
-                'report.attachments',
-                'attachments',
-                'hospitalUnity',
-                'medicalProfessional',
-                'ownerProfessional',
-                'socialProfessional',
-                'travelProfessional',
-                'costAssistanceProfessional',
-                'accountabilityProfessional',
-                'travels.passengers.patient',
-                'travels.passengers.escort',
-                'costAssistances.costAssistanceDailies.dailyCost',
-                'accountabilities.accountabilityDailies.dailyCost'
-            ])
             ->latest('id')
             ->get();
 
@@ -61,33 +43,14 @@ class PatientRequestController extends Controller
     }
 
     /**
-     * Listar solicitações ativas do TFD.
+     * Listar solicitações arquivadas do TFD.
      */
     public function getArchivePatientRequests(): JsonResponse
     {
         $this->authorize('tfd/solicitação listar');
 
-        $patientRequests = PatientRequest::query()
-            ->notPatientBack()
+        $patientRequests = $this->baseRequestQuery()
             ->where('is_owner_archived', true)
-            ->with([
-                'report.patientCare.patient',
-                'report.patientCare.user.professional',
-                'report.cid',
-                'report.attachments',
-                'attachments',
-                'hospitalUnity',
-                'medicalProfessional',
-                'ownerProfessional',
-                'socialProfessional',
-                'travelProfessional',
-                'costAssistanceProfessional',
-                'accountabilityProfessional',
-                'travels.passengers.patient',
-                'travels.passengers.escort',
-                'costAssistances.costAssistanceDailies.dailyCost',
-                'accountabilities.accountabilityDailies.dailyCost'
-            ])
             ->latest('id')
             ->get();
 
@@ -97,7 +60,7 @@ class PatientRequestController extends Controller
     /**
      * Criar uma nova solicitação.
      */
-    public function createPatientRequest(Request $request)
+    public function createPatientRequest(Request $request): JsonResponse
     {
         $this->authorize('tfd/solicitação criar');
 
@@ -107,7 +70,7 @@ class PatientRequestController extends Controller
     /**
      * Atualizar dados de uma solicitação.
      */
-    public function updatePatientRequest(PatientRequest $patient_request, Request $request)
+    public function updatePatientRequest(PatientRequest $patient_request, Request $request): JsonResponse
     {
         $this->authorize('tfd/solicitação atualizar');
 
@@ -117,7 +80,7 @@ class PatientRequestController extends Controller
     /**
      * Excluir uma solicitação.
      */
-    public function deletePatientRequest(PatientRequest $patient_request)
+    public function deletePatientRequest(PatientRequest $patient_request): JsonResponse
     {
         $this->authorize('tfd/solicitação deletar');
 
@@ -127,7 +90,7 @@ class PatientRequestController extends Controller
     /**
      * Sobrestar/paralisar uma solicitação.
      */
-    public function haltedPatientRequest(PatientRequest $patient_request)
+    public function haltedPatientRequest(PatientRequest $patient_request): JsonResponse
     {
         $this->authorize('tfd/solicitação atualizar');
 
@@ -135,9 +98,9 @@ class PatientRequestController extends Controller
     }
 
     /**
-     * Arquivar a solicitação de passagem.
+     * Arquivar a solicitação.
      */
-    public function archivePatientRequest(PatientRequest $patient_request)
+    public function archivePatientRequest(PatientRequest $patient_request): JsonResponse
     {
         $this->authorize('tfd/solicitação atualizar');
 
@@ -145,9 +108,9 @@ class PatientRequestController extends Controller
     }
 
     /**
-     * Encaminhar/processar solicitação para o regulador médico.
+     * Encaminhar/processar solicitação para regulação/etapas.
      */
-    public function processPatientRequest(PatientRequest $patient_request, Request $request)
+    public function processPatientRequest(PatientRequest $patient_request, Request $request): JsonResponse
     {
         $this->authorize('tfd/solicitação atualizar');
 
@@ -157,7 +120,7 @@ class PatientRequestController extends Controller
     /**
      * Movimentar solicitação a partir da aba de processos.
      */
-    public function movePatientRequestFromProcesses(PatientRequest $patient_request)
+    public function movePatientRequestFromProcesses(PatientRequest $patient_request): JsonResponse
     {
         $this->authorize('tfd/solicitação atualizar');
 
@@ -167,7 +130,7 @@ class PatientRequestController extends Controller
     /**
      * Movimentar solicitação a partir do setor "Outros".
      */
-    public function movePatientRequestFromOthers(PatientRequest $patient_request)
+    public function movePatientRequestFromOthers(PatientRequest $patient_request): JsonResponse
     {
         $this->authorize('tfd/solicitação atualizar');
 
@@ -175,9 +138,9 @@ class PatientRequestController extends Controller
     }
 
     /**
-     * Movimentar solicitação a partir do setor "Outros".
+     * Restaurar solicitação do arquivo.
      */
-    public function movePatientRequestFromArchive(PatientRequest $patient_request)
+    public function movePatientRequestFromArchive(PatientRequest $patient_request): JsonResponse
     {
         $this->authorize('tfd/solicitação atualizar');
 
@@ -185,9 +148,19 @@ class PatientRequestController extends Controller
     }
 
     /**
+     * Realizar a devolução/retorno da solicitação para o setor/papel especificado.
+     */
+    public function undoPatientRequest(PatientRequest $patient_request, Request $request): JsonResponse
+    {
+        $this->authorize('tfd/solicitação atualizar');
+
+        return $this->patientRequestService->undoPatientRequest($patient_request, $request);
+    }
+
+    /**
      * Finalizar o retorno de uma solicitação.
      */
-    public function finishBackPatientRequest(PatientRequest $patient_request)
+    public function finishBackPatientRequest(PatientRequest $patient_request): JsonResponse
     {
         $this->authorize('tfd/solicitação atualizar');
 
@@ -217,7 +190,7 @@ class PatientRequestController extends Controller
     /**
      * Anexar arquivo a uma solicitação.
      */
-    public function createPatientRequestAttachment(PatientRequest $patient_request, Request $request)
+    public function createPatientRequestAttachment(PatientRequest $patient_request, Request $request): JsonResponse
     {
         $this->authorize('tfd/solicitação anexos');
 
@@ -227,7 +200,7 @@ class PatientRequestController extends Controller
     /**
      * Atualizar anexo da solicitação.
      */
-    public function updatePatientRequestAttachment(PatientRequestAttachment $patient_request_attachment, Request $request)
+    public function updatePatientRequestAttachment(PatientRequestAttachment $patient_request_attachment, Request $request): JsonResponse
     {
         $this->authorize('tfd/solicitação anexos');
 
@@ -237,7 +210,7 @@ class PatientRequestController extends Controller
     /**
      * Remover anexo da solicitação.
      */
-    public function deletePatientRequestAttachment(PatientRequestAttachment $patient_request_attachment)
+    public function deletePatientRequestAttachment(PatientRequestAttachment $patient_request_attachment): JsonResponse
     {
         $this->authorize('tfd/solicitação anexos');
 
@@ -302,11 +275,9 @@ class PatientRequestController extends Controller
     {
         $this->authorize('tfd/solicitação listar');
 
-        // 1. Consulta base com relacionamentos padrão
         $baseQuery = fn () => Professional::query()
             ->with('user');
 
-        // 2. Consultas separadas por tipo
         $medicalProfessionals = $baseQuery()
             ->withCount('patientMedicalRequests as requests_count')
             ->whereHas('types', fn ($q) => $q->where('type', 'Médico'))
@@ -327,12 +298,44 @@ class PatientRequestController extends Controller
             ->whereHas('types', fn ($q) => $q->where('type', 'Ajuda de Custo'))
             ->get();
 
-        // 3. Monta o array final com as coleções separadas
         return response()->json([
             'medical_professionals'         => $medicalProfessionals,
             'social_professionals'          => $socialProfessionals,
             'travel_professionals'          => $travelProfessionals,
             'cost_assistance_professionals' => $costAssistanceProfessionals,
         ], JsonResponse::HTTP_OK);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Auxiliares Internos
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Query base com relacionamentos padrão das solicitações.
+     */
+    private function baseRequestQuery(): Builder
+    {
+        return PatientRequest::query()
+            ->notPatientBack()
+            ->with([
+                'report.patientCare.patient',
+                'report.patientCare.user.professional',
+                'report.cid',
+                'report.attachments',
+                'attachments',
+                'hospitalUnity',
+                'medicalProfessional',
+                'ownerProfessional',
+                'socialProfessional',
+                'travelProfessional',
+                'costAssistanceProfessional',
+                'accountabilityProfessional',
+                'travels.passengers.patient',
+                'travels.passengers.escort',
+                'costAssistances.costAssistanceDailies.dailyCost',
+                'accountabilities.accountabilityDailies.dailyCost',
+            ]);
     }
 }

@@ -126,33 +126,40 @@ Route::middleware(['api', Auth::class])
     ->name('patient-requests.')
     ->controller(PatientRequestController::class)
     ->group(function () {
-        // Listagem e CRUD principal
+        // ==========================================
+        // 1. CONSULTAS AUXILIARES
+        // ==========================================
+        Route::get('patients', 'getPatients')->name('patients.index');
+        Route::get('patients/{patient_care}/reports', 'getPatientReports')->name('patients.reports.index');
+        Route::get('hospital-unities', 'getHospitalUnities')->name('hospital-unities.index');
+        Route::get('professionals', 'getProfessionals')->name('professionals.index');
+
+        // ==========================================
+        // 2. RECURSO PRINCIPAL: SOLICITAÇÕES (PATIENT REQUESTS)
+        // ==========================================
         Route::get('/', 'getPatientRequests')->name('index');
-        Route::get('/archived', 'getArchivePatientRequests')->name('index');
+        Route::get('archived', 'getArchivePatientRequests')->name('archived');
         Route::post('/', 'createPatientRequest')->name('store');
-        Route::patch('{patient_request}', 'updatePatientRequest')->name('update');
+        Route::match(['put', 'post', 'patch'], '{patient_request}', 'updatePatientRequest')->name('update');
         Route::delete('{patient_request}', 'deletePatientRequest')->name('destroy');
 
-        // Ações de estado e movimentações
+        // Ações de Estado e Transições
         Route::patch('{patient_request}/halted', 'haltedPatientRequest')->name('halt');
         Route::patch('{patient_request}/archive', 'archivePatientRequest')->name('archive');
         Route::patch('{patient_request}/process', 'processPatientRequest')->name('process');
         Route::patch('{patient_request}/move-from-processes', 'movePatientRequestFromProcesses')->name('move-from-processes');
         Route::patch('{patient_request}/move-from-others', 'movePatientRequestFromOthers')->name('move-from-others');
         Route::patch('{patient_request}/move-from-archive', 'movePatientRequestFromArchive')->name('move-from-archive');
+        Route::patch('{patient_request}/undo', 'undoPatientRequest')->name('undo');
         Route::patch('{patient_request}/finish-back', 'finishBackPatientRequest')->name('finish-back');
 
-        // Anexos da solicitação
+        // ==========================================
+        // 3. SUB-RECURSO: ANEXOS (ATTACHMENTS)
+        // ==========================================
         Route::get('{patient_request}/attachments', 'getPatientRequestAttachments')->name('attachments.index');
         Route::post('{patient_request}/attachments', 'createPatientRequestAttachment')->name('attachments.store');
-        Route::post('attachments/{patient_request_attachment}', 'updatePatientRequestAttachment')->name('attachments.update'); // Mantido método POST para suporte a upload de arquivos
+        Route::match(['put', 'post'], 'attachments/{patient_request_attachment}', 'updatePatientRequestAttachment')->name('attachments.update');
         Route::delete('attachments/{patient_request_attachment}', 'deletePatientRequestAttachment')->name('attachments.destroy');
-
-        // Consultas e dados auxiliares
-        Route::get('patients', 'getPatients')->name('patients.index');
-        Route::get('patients/{patient_care}/reports', 'getPatientReports')->name('patients.reports.index');
-        Route::get('hospital-unities', 'getHospitalUnities')->name('hospital-unities.index');
-        Route::get('professionals', 'getProfessionals')->name('professionals.index');
     });
 
 Route::middleware(['api', Auth::class])
